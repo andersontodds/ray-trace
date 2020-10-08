@@ -3,12 +3,46 @@
 #
 
 ##
+#= Functions:
+	phase_refractive_index!():
+		inputs:	μ, dμdψ, r, θ, χ, freq
+		outputs: mutates μ, dμdψ
+
+	ddr!():
+		inputs:	μ, dμdψ, r, θ, χ, freq, dμdr
+		outputs: mutates dμdr
+		calls: phase_refractive_index!()
+
+	ddθ!():
+		inputs:	μ, dμdψ, r, θ, χ, freq, dμdθ
+		outputs: mutates dμdθ
+		calls: phase_refractive_index!()
+
+	ddχ!():
+		inputs:	μ, dμdψ, r, θ, χ, freq, dμdχ
+		outputs: mutates dμdχ
+		calls: phase_refractive_index!()
+
+	ddf!():
+		inputs:	μ, dμdψ, r, θ, χ, freq, dμdf
+		outputs: mutates dμdf
+		calls: phase_refractive_index!()
+
+	haselgrove!():
+		inputs: μ, dμdψ, r, θ, χ, freq, t, dμ, ddt
+				dμdr,dμdθ,dμdχ,dμdf = dμ
+				ddt = [drdt, dθdt, dχdt]
+		outputs: mutates ddt
+
+
+=#
+
 #=TODO:
 	1. Get functions and argument-passing working with single input (i.e. non-vectorized, non-looping)
 	2. Vectorize!
 	3. Run and time solver
 	4. Switch to in-place functions where possible
-	5. Run and time solver, seek out optimization
+	5. Run and time solver, optimize
 =#
 #const rₑ = 6378100
 re = 6.3781e6      	# radius of Earth in meters
@@ -54,12 +88,15 @@ u = function phase_refractive_index!(dμdψ,μ,r,θ,χ,freq)
 	# define R, L, P, D, S,
 	# R ≡ 1 - Σ(ωₖ²/ω²)(ω/(ω+ϵₖΩₖ))
 	R = 1.0 - (ω_e2/ω^2)*(ω/(ω - Ω_e)) - (ω_p2/ω^2)*(ω/(ω + Ω_p))
+	print("R = ",R,"\n")
 
 	# L ≡ 1 - Σ(ωₖ²/ω²)(ω/(ω-ϵₖΩₖ))
 	L = 1.0 - (ω_e2/ω^2)*(ω/(ω + Ω_e)) - (ω_p2/ω^2)*(ω/(ω - Ω_p))
+	print("L = ",L,"\n")
 
 	# P ≡ 1 - Σ(ωₖ²/ω²)
 	P = 1.0 - (ω_e2/ω^2) - (ω_p2/ω^2)
+	print("P = ",P,"\n")
 
 	# D ≡ ½(R-L); S ≡ ½(R+L)
 	D = (R - L)/2
@@ -99,7 +136,7 @@ u = function phase_refractive_index!(dμdψ,μ,r,θ,χ,freq)
 
 	#DEBUG check values
 	print("μ = ",μ,"\n")
-	print("dμdψ = ", dμdψ)
+	print("dμdψ = ", dμdψ,"\n")
 
 	u = [μ,dμdψ]
 
@@ -107,7 +144,8 @@ end
 
 # Derivatives of phase refractive index w.r.t. r, θ, χ,
 # calculate derivative of μ w.r.t. r
-dμdr = function ddr(μ,r,θ,χ,freq)
+function ddr!(u,r,θ,χ,freq,dμdr)
+	μ,dμdψ = u			# unpack
 	dr = 1.0e-11		# r step size
 
 	μ_l = phase_refractive_index!(dμdψ,μ,r-dr/2.0,θ,χ,freq)
@@ -116,7 +154,8 @@ dμdr = function ddr(μ,r,θ,χ,freq)
 	dμdr = (μ_r[1] - μ_l[1])/dr
 end
 
-dμdθ = function ddθ(μ,r,θ,χ,freq)
+function ddθ!(u,r,θ,χ,freq,dμdθ)
+	μ,dμdψ = u			# unpack
 	dθ = 1.0e-11		# θ step size
 
 	μ_l = phase_refractive_index!(dμdψ,μ,r,θ-dθ/2.0,χ,freq)
@@ -125,7 +164,8 @@ dμdθ = function ddθ(μ,r,θ,χ,freq)
 	dμdθ = (μ_r[1] - μ_l[1])/dθ
 end
 
-dμdχ = function ddχ(μ,r,θ,χ,freq)
+function ddχ!(u,r,θ,χ,freq,dμdχ)
+	μ,dμdψ = u			# unpack
 	dχ = 1.0e-11		# χ step size
 
 	μ_l = phase_refractive_index!(dμdψ,μ,r,θ,χ-dχ/2.0,freq)
@@ -134,7 +174,8 @@ dμdχ = function ddχ(μ,r,θ,χ,freq)
 	dμdχ = (μ_r[1] - μ_l[1])/dχ
 end
 
-dμdf = function ddf(μ,r,θ,χ,freq)
+function ddf!(u,r,θ,χ,freq,dμdf)
+	μ,dμdψ = u			# unpack
 	df = 1.0e-5		# f step size
 
 	μ_l = phase_refractive_index!(dμdψ,μ,r,θ,χ,freq-df/2.0)
@@ -144,24 +185,27 @@ dμdf = function ddf(μ,r,θ,χ,freq)
 end
 
 # calculate derivatives w.r.t. time
-function haselgrove!(dμ,μ,r,θ,χ,freq,t)
+function haselgrove!(μ,dμdψ,r,θ,χ,freq,t,dμ,ddt)
 
 	dμdr,dμdθ,dμdχ,dμdf = dμ		# unpack dμ
+	u = [μ, dμdψ]
 
-	dμdr = ddr(μ,r,θ,χ,freq)
-	dμdθ = ddθ(μ,r,θ,χ,freq)
-	dμdχ = ddχ(μ,r,θ,χ,freq)
-	dμdf = ddf(μ,r,θ,χ,freq)
+	dμdr = ddr!(u,r,θ,χ,freq,dμdr)
+	dμdθ = ddθ!(u,r,θ,χ,freq,dμdθ)
+	dμdχ = ddχ!(u,r,θ,χ,freq,dμdχ)
+	dμdf = ddf!(u,r,θ,χ,freq,dμdf)
 
 
     drdt = 1/(μ^2)*(μ*cos(χ)+dμdχ*sin(χ))
     dθdt = 1/(r*μ^2)*(μ*sin(χ)-dμdχ*cos(χ))
     dχdt = 1/(r*μ^2)*(dμdθ*cos(χ)-(r*dμdr + μ)*cos(χ))
 
+	ddt = [drdt, dθdt, dχdt]
+
 	#DEBUG check values
 	print("drdt = ",drdt,"\n")
-	print("drdθ = ",drdθ,"\n")
-	print("drdχ = ",drdχ)
+	print("dθdt = ",dθdt,"\n")
+	print("dχdt = ",dχdt,"\n")
 
 
     # dμdψ = 1/(2*μ)*((dBdψ + dFdψ)/(2*A) - 2*dAdψ*(B+F)/(2*A^2))
@@ -175,7 +219,7 @@ function haselgrove!(dμ,μ,r,θ,χ,freq,t)
 end
 
 #DEBUG check values
-haselgrove!([1,1,1,1],1,10000,pi/4,0,5000,0)
+haselgrove!(1.0,1.0,10000.0,pi/4.0,0.0,5000.0,0.0,[1.0,1.0,1.0,1.0],[1.0,1.0,1.0])
 
 ##
 function lorenz!(du, u, p, t)

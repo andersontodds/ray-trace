@@ -55,12 +55,12 @@ eps = 8.854e-12 	# permittivity of free space in mks
 using DifferentialEquations
 
 # calculate phase refractive index μ
-# DONE! TODO: convert this function to mutating form
+# DONE! todo: convert this function to mutating form
 # 	QUESTION: is this possible, given that phase_refractive_index!() must be called multiple times in a single ddr!() (e.g.) call, before using the result?
 # 	ANSWER: yes! see call/assignment in ddr!()
 
-function phase_refractive_index!(dμdψ,μ,r,θ,χ,freq)
-
+u = function phase_refractive_index(r,θ,χ,freq)
+# u = [μ, dμdψ]
     # convert from radial angle to wave normal angle
     dip = atan(2.0*tan(pi/2.0-θ))     	# dip angle: angle between horizontal and B field
     ϕ = (3.0/2.0)*pi - dip              # intermediate angle -- NOT azimuth
@@ -91,28 +91,28 @@ function phase_refractive_index!(dμdψ,μ,r,θ,χ,freq)
 
 	# define R, L, P, D, S,
 	# R ≡ 1 - Σ(ωₖ²/ω²)(ω/(ω+ϵₖΩₖ))
-	R = 1.0 - (ω_e2/ω^2)*(ω/(ω - Ω_e)) - (ω_p2/ω^2)*(ω/(ω + Ω_p))
+	R = 1.0 - (ω_e2/ω^2.0)*(ω/(ω - Ω_e)) - (ω_p2/ω^2.0)*(ω/(ω + Ω_p))
 	#println("R = ",R)
 
 	# L ≡ 1 - Σ(ωₖ²/ω²)(ω/(ω-ϵₖΩₖ))
-	L = 1.0 - (ω_e2/ω^2)*(ω/(ω + Ω_e)) - (ω_p2/ω^2)*(ω/(ω - Ω_p))
+	L = 1.0 - (ω_e2/ω^2.0)*(ω/(ω + Ω_e)) - (ω_p2/ω^2.0)*(ω/(ω - Ω_p))
 	#println("L = ",L)
 
 	# P ≡ 1 - Σ(ωₖ²/ω²)
-	P = 1.0 - (ω_e2/ω^2) - (ω_p2/ω^2)
+	P = 1.0 - (ω_e2/ω^2.0) - (ω_p2/ω^2.0)
 	#println("P = ",P)
 
 	# D ≡ ½(R-L); S ≡ ½(R+L)
-	D = (R - L)/2
-	S = (R + L)/2
+	D = (R - L)/2.0
+	S = (R + L)/2.0
 
 	# define parts of dispersion relation
 	# Aμ⁴ - Bμ² + C = 0
 	# A = Ssin²ψ + Pcos²ψ
-	A = S*sin(ψ)^2 + P*cos(ψ)^2
+	A = S*sin(ψ)^2.0 + P*cos(ψ)^2.0
 
 	# B = RLsin²ψ + PS(1 + cos²ψ)
-	B = R*L*sin(ψ)^2 + P*S*(1+cos(ψ)^2)
+	B = R*L*sin(ψ)^2.0 + P*S*(1.0+cos(ψ)^2.0)
 
 	# C  = PRL
 	C = P*R*L
@@ -121,12 +121,12 @@ function phase_refractive_index!(dμdψ,μ,r,θ,χ,freq)
 	# μ² = (B +- F)/2A
 	# where F² = (RL-PS)²sin⁴ψ + 4P²D²cos²ψ
 	#QUESTION: is it faster to (a) solve for F², then sqrt(); or (b) solve for F directly? (a) requires fewer sqrt() calls
-	F2 = (R*L - P*S)^2*sin(ψ)^4 + 4*(P*D*cos(ψ))^2
+	F2 = (R*L - P*S)^2.0*sin(ψ)^4.0 + 4.0*(P*D*cos(ψ))^2.0
 	F = sqrt(F2)
 
-	μ2_minus = (B - F)/(2*A)
+	μ2_minus = (B - F)/(2.0*A)
 	μ_minus = sqrt(μ2_minus)
-	μ2_plus = (B + F)/(2*A)
+	μ2_plus = (B + F)/(2.0*A)
 	μ_plus = sqrt(μ2_plus)
 
 	# Electron whistler case: ψ = 0, μ² = R; this is the μ_minus case
@@ -136,90 +136,99 @@ function phase_refractive_index!(dμdψ,μ,r,θ,χ,freq)
 	dAdψ = 2.0*(S-P)*sin(ψ)*cos(ψ)
 	dBdψ = 2.0*(R*L-P*S)*sin(ψ)*cos(ψ)
     dCdψ = 0.0
-    dμdψ = ((μ^4)*dAdψ-(μ^2)*dBdψ+dCdψ)/(4.0*A*(μ^3)-2.0*B*μ)
+    dμdψ = ((μ^4.0)*dAdψ-(μ^2.0)*dBdψ+dCdψ)/(4.0*A*(μ^3.0)-2.0*B*μ)
 
 	#DEBUG check values
 	#println("μ = ",μ)
 	#println("dμdψ = ", dμdψ)
 
 	# non-mutating output
-	#u = [μ,dμdψ]
+	u = [μ,dμdψ]
 
 end
 
 # Derivatives of phase refractive index w.r.t. r, θ, χ,
 # calculate derivative of μ w.r.t. r
-function ddr!(u,r,θ,χ,freq,dμdr)
-	μ,dμdψ = u			# unpack
+dμdr = function ddr(r,θ,χ,freq)
+	#μ,dμdψ = u			# unpack
 	dr = 1.0e-11		# r step size
 
-	phase_refractive_index!(dμdψ,μ,r-dr/2.0,θ,χ,freq)
-	μ_l = μ
-	phase_refractive_index!(dμdψ,μ,r+dr/2.0,θ,χ,freq)
-	μ_r = μ
+	μ_l = phase_refractive_index(r-dr/2.0,θ,χ,freq)
+	#μ_l = μ
+	μ_r = phase_refractive_index(r+dr/2.0,θ,χ,freq)
+	#μ_r = μ
 
 	dμdr = (μ_r[1] - μ_l[1])/dr
 end
 
-function ddθ!(u,r,θ,χ,freq,dμdθ)
-	μ,dμdψ = u			# unpack
+dμdθ = function ddθ(r,θ,χ,freq)
+	#μ,dμdψ = u			# unpack
 	dθ = 1.0e-11		# θ step size
 
-	phase_refractive_index!(dμdψ,μ,r,θ-dθ/2.0,χ,freq)
-	μ_l = μ
-	println("μ_l = ", μ)
-	phase_refractive_index!(dμdψ,μ,r,θ+dθ/2.0,χ,freq)
-	μ_r = μ
-	println("μ_r = ", μ)
+	μ_l = phase_refractive_index(r,θ-dθ/2.0,χ,freq)
+	#μ_l = μ
+	#println("μ_l = ", μ)
+	μ_r = phase_refractive_index(r,θ+dθ/2.0,χ,freq)
+	#μ_r = μ
+	#println("μ_r = ", μ)
 
 	dμdθ = (μ_r[1] - μ_l[1])/dθ
 end
 
-function ddχ!(u,r,θ,χ,freq,dμdχ)
-	μ,dμdψ = u			# unpack
+dμdχ = function ddχ(r,θ,χ,freq)
+	#μ,dμdψ = u			# unpack
 	dχ = 1.0e-11		# χ step size
 
-	phase_refractive_index!(dμdψ,μ,r,θ,χ-dχ/2.0,freq)
-	μ_l = μ
-	phase_refractive_index!(dμdψ,μ,r,θ,χ-dχ/2.0,freq)
-	μ_r = μ
+	μ_l = phase_refractive_index(r,θ,χ-dχ/2.0,freq)
+	#μ_l = μ
+	μ_r = phase_refractive_index(r,θ,χ-dχ/2.0,freq)
+	#μ_r = μ
 
 	dμdχ = (μ_r[1] - μ_l[1])/dχ
 end
 
-function ddf!(u,r,θ,χ,freq,dμdf)
-	μ,dμdψ = u			# unpack
+dμdf = function ddf(r,θ,χ,freq)
+	#μ,dμdψ = u			# unpack
 	df = 1.0e-5		# f step size
 
-	phase_refractive_index!(dμdψ,μ,r,θ,χ,freq-df/2.0)
-	μ_l = μ
-	phase_refractive_index!(dμdψ,μ,r,θ,χ,freq+df/2.0)
-	μ_r = μ
+	μ_l = phase_refractive_index(r,θ,χ,freq-df/2.0)
+	#μ_l = μ
+	μ_r = phase_refractive_index(r,θ,χ,freq+df/2.0)
+	#μ_r = μ
 
 	dμdf = (μ_r[1] - μ_l[1])/df
 end
 
 # calculate derivatives w.r.t. time
-function haselgrove!(μ,dμdψ,r,θ,χ,freq,dμ,ddt,t)
-# can this be re-written in the form
-# 	f!(du, u, p, t)
-# 	where du, u are result/argument of differentiation, p are static parameters, and t is the independent variable(s)?
-# haselgrove!()
+function haselgrove!(du,u,p,t)
+# 	du = drdt, dθdt, dχdt
+# 	u = r, θ, χ
+#  	p = freq, μ, dμdψ, dμdr, dμdθ, dμdχ, dμdf
+# 		^ this compiles and runs, but parameters
+# 	t = time
 
-	dμdr,dμdθ,dμdχ,dμdf = dμ		# unpack dμ
-	u = [μ, dμdψ]
+	r, θ, χ = u 						# unpack u
+	freq = p[1] 	# unpack p
 
-	dμdr = ddr!(u,r,θ,χ,freq,dμdr)
-	dμdθ = ddθ!(u,r,θ,χ,freq,dμdθ)
-	dμdχ = ddχ!(u,r,θ,χ,freq,dμdχ)
-	dμdf = ddf!(u,r,θ,χ,freq,dμdf)
+	dμdr = ddr(r,θ,χ,freq)			# mutating form: ddr!([μ,dμdψ],r,θ,χ,freq,dμdr)
+	dμdθ = ddθ(r,θ,χ,freq)			# calls phase_refractive_index(r,θ,χ,freq)
+	dμdχ = ddχ(r,θ,χ,freq)
+	dμdf = ddf(r,θ,χ,freq)
 
+	v = phase_refractive_index(r,θ,χ,freq)
+	μ = v[1]
+	dμdψ = v[2]
 
-    drdt = 1/(μ^2)*(μ*cos(χ)+dμdχ*sin(χ))
-    dθdt = 1/(r*μ^2)*(μ*sin(χ)-dμdχ*cos(χ))
-    dχdt = 1/(r*μ^2)*(dμdθ*cos(χ)-(r*dμdr + μ)*cos(χ))
+    du[1] = 1/(μ^2)*(μ*cos(χ)+dμdχ*sin(χ))
+    du[2] = 1/(r*μ^2)*(μ*sin(χ)-dμdχ*cos(χ))
+    du[3] = 1/(r*μ^2)*(dμdθ*cos(χ)-(r*dμdr + μ)*cos(χ))
 
-	ddt = [drdt, dθdt, dχdt]
+	#du = [drdt, dθdt, dχdt]
+
+	#println("drdt = ", drdt)
+	#println("dθdt = ", dθdt)
+	#println("dχdt = ", dχdt)
+
 
 	#DEBUG check values
 	#println("drdt = ",drdt)
@@ -239,25 +248,29 @@ end
 
 #DEBUG check values
 #haselgrove!(μ,dμdψ,r,θ,χ,freq,dμ,ddt,t)
-haselgrove!(1.0,1.0,10000.0,pi/4.0,0.0,5000.0,[1.0,1.0,1.0,1.0],[1.0,1.0,1.0],0.0)
+#haselgrove!(1.0,1.0,10000.0,pi/4.0,0.0,5000.0,[1.0,1.0,1.0,1.0],[1.0,1.0,1.0],0.0)
+
+du0 = [1.0, 1.0, 1.0]
+u0 = [8000.0, pi/4.0, 0.0]
+p = [5000.0]
+t0 = 0.0
+haselgrove!(du0, u0, p, t0)
+println(du0)
 
 ## ODE solver!
 #QUESTION: how does ODEProblem work?
-# how do you pass u, p, tspan; and keep these separate?
-μ0 = 1.0
-dμdψ0 = 1.0
-r0 = 10000.0
-θ0 = pi/4.0
-χ0 = 0.0
-f0 = 5000.0
-dμ0 = [1.0,1.0,1.0,1.0]
-ddt0 = [1.0,1.0,1.0]
-u0 = [μ0;dμdψ0;r0;θ0;χ0;f0;dμ0;ddt0]
 
-tspan = (0.0,10.0)
+using BenchmarkTools
 
-hasel_prob = ODEProblem(haselgrove!,u0,tspan)
-hasel_soln = solve(hasel_prob)
+u0 = [8000.0, pi/4.0, 0.0]					# r0, θ0, χ0
+p = [5000.0]	# f0, dμdψ, dμdr, dμdθ, dμdχ, dμdf
+tspan = (0.0,1.0)
+
+hasel_prob = ODEProblem(haselgrove!,u0,tspan,p)
+@benchmark hasel_soln = solve(hasel_prob)
+
+using Plots
+plot(hasel_soln)
 
 ##
 function lorenz!(du, u, p, t)
@@ -304,3 +317,21 @@ varargs(1,2,3)
 
 a = [1:5;]
 sum(a)
+
+## type/value check
+# r = 8000.0
+# θ = pi/4.0
+# χ = 0.0
+# freq = 5000.0
+# dip = atan(2.0*tan(pi/2.0-θ))
+# ϕ = (3.0/2.0)*pi - dip
+# ψ = χ - ϕ
+# ω = 2.0*pi*freq
+# rE = r/re
+# Bmag = B0*((re^3)/(r^3))*sqrt(4.0-3.0*cos((pi/2.)-θ)*cos((pi/2.0)-θ))
+# n_e = 1.e6*(1.8e5*exp(-4.183119*(rE-1.0471)))
+# n_p = 1.e6*(1.8e5*exp(-4.183119*(rE-1.0471)))
+# ω_e2 = (n_e*(e^2))/(eps*me)
+# ω_p2 = (n_p*(e^2))/(eps*mp)
+# Ω_e = (e*Bmag)/(me)
+# Ω_p = (e*Bmag)/(mp)

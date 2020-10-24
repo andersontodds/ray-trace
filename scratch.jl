@@ -133,11 +133,11 @@ u = function phase_refractive_index(r,θ,χ,freq)
 
 	catch err
 		if isa(err,DomainError)
-			println("DomainError in μ_minus!")
-			println("B=", B)
-			println("F=", F)
+			# println("DomainError in μ_minus!")
+			# println("B=", B)
+			# println("F=", F)
 		else
-			println(err)
+			# println(err)
 		end
 	end
 
@@ -146,12 +146,12 @@ u = function phase_refractive_index(r,θ,χ,freq)
 
 	catch err
 		if isa(err,DomainError)
-			println("DomainError in μ_plus!")
-			println("B=", B)
-			println("F=", F)
-			println("A=", A)
+			# println("DomainError in μ_plus!")
+			# println("B=", B)
+			# println("F=", F)
+			# println("A=", A)
 		else
-			println(err)
+			# println(err)
 		end
 	end
 
@@ -295,10 +295,10 @@ using LSODA
 
 u0 = [re+1.0e+6, -1.0*pi/4, 0.0, 5000.0]					# r0, θ0, χ0
 p = []	# f0, dμdψ, dμdr, dμdθ, dμdχ, dμdf
-tspan = (0.0,1.0e+11)
+tspan = (0.0,1.0e+9)
 
 hasel_prob = ODEProblem(haselgrove!,u0,tspan,p)
-hasel_soln = solve(hasel_prob)
+hasel_soln = solve(hasel_prob, alg_hints=[:stiff], reltol=1e-4)
 
 using Plots
 plot(hasel_soln)
@@ -309,8 +309,8 @@ r = hasel_soln[1,:]
 χ = hasel_soln[3,:]
 f = hasel_soln[4,:]
 
-x = r.*cos.(θ)
-y = r.*sin.(θ)
+x = r.*sin.(θ)
+y = r.*cos.(θ)
 
 plot(x,y)
 

@@ -47,7 +47,7 @@
 #const rₑ = 6378100
 c = 2.99792458e8
 re = 6.3712e6      	# radius of Earth in meters
-B0 = 3.0696381e-5   # magnitude of B field (where?) in Tesla
+B0 = 3.0696381e-5   # magnitude of B field at Earth's equator surface in Tesla
 e = 1.602e-19 		# electric charge in Coulombs
 me = 9.1093e-31		# electron rest mass
 mp = 1.6726219e-27	# proton rest mass
@@ -74,7 +74,11 @@ u = function phase_refractive_index(r,θ,χ,freq)
     rE = r/re
 
     # find magnetic field at (r,θ) from dipole field model
-    Bmag = B0*((re^3)/(r^3))*sqrt(4.0-3.0*cos((pi/2.)-θ)*cos((pi/2.0)-θ))
+    #Bmag = B0*((re^3)/(r^3))*sqrt(4.0-3.0*cos((pi/2.)-θ)*cos((pi/2.0)-θ))
+	# dipole field magnitude from Parks p. 61:
+	# B(r,λ) = μ₀M/(4πr³)*(1+3sin²λ)^(1/2)
+	# 		 = μ₀M/(4πr³)*(1+3sin²(π/2 - θ))^(1/2)
+	Bmag = B0*(re^3/(r^3))*sqrt(1+3*sin((pi/2.)-θ)*sin((pi/2.0)-θ))
 
     # calculate electron and proton density profiles
     n_e = 1.e6*(1.8e5*exp(-4.183119*(rE-1.0471)))
@@ -125,24 +129,34 @@ u = function phase_refractive_index(r,θ,χ,freq)
 	F2 = (R*L - P*S)^2.0*sin(ψ)^4.0 + 4.0*(P*D*cos(ψ))^2.0
 	F = sqrt(F2)
 
+	# Rice 1997: typical solution to dispersion relation with quadratic formula
 	μ2_minus = (B - F)/(2.0*A)
 	μ2_plus = (B + F)/(2.0*A)
 
+	# Bortnik 2004:
+	# if B > 0
+	# 	μ2_minus = (B - F)/(2.0*A)
+	# else
+	# 	μ2_plus = (2.0*C)/(B + F)
+	# end
+
+
 	μ_minus = try
-		sqrt(μ2_minus)
+		sqrt(abs(μ2_minus))	# abs() is not physical! for test only
 
 	catch err
 		if isa(err,DomainError)
-			# println("DomainError in μ_minus!")
-			# println("B=", B)
-			# println("F=", F)
+			println("DomainError in μ_minus!")
+			println("B=", B)
+			println("F=", F)
+			println("A=", A)
 		else
 			# println(err)
 		end
 	end
 
 	μ_plus = try
-		sqrt(μ2_plus)
+		sqrt(abs(μ2_plus)) # abs() is not physical! for test only
 
 	catch err
 		if isa(err,DomainError)
@@ -158,8 +172,8 @@ u = function phase_refractive_index(r,θ,χ,freq)
 
 
 	# Electron whistler case: ψ = 0, μ² = R; this is the μ_plus case
-	μ = μ_minus		# EMIC case
-	#μ = μ_plus		# electron whistler case
+	#μ = μ_minus		# EMIC case
+	μ = μ_plus		# electron whistler case
 
 	# Find dA/dψ, dB/dψ, dC/dψ, dμ/dψ
 	dAdψ = 2.0*(S-P)*sin(ψ)*cos(ψ)
@@ -210,7 +224,7 @@ dμdχ = function ddχ(r,θ,χ,freq)
 
 	μ_l = phase_refractive_index(r,θ,χ-dχ/2.0,freq)
 	#μ_l = μ
-	μ_r = phase_refractive_index(r,θ,χ-dχ/2.0,freq)
+	μ_r = phase_refractive_index(r,θ,χ+dχ/2.0,freq) # NOTE Nov 3: corrected error 'χ-dχ/2.0'➡'χ+dχ/2.0'
 	#μ_r = μ
 
 	dμdχ = (μ_r[1] - μ_l[1])/dχ
@@ -295,12 +309,13 @@ using LSODA
 
 u0 = [re+1.0e+6, -1.0*pi/4, 0.0, 5000.0]					# r0, θ0, χ0
 p = []	# f0, dμdψ, dμdr, dμdθ, dμdχ, dμdf
-tspan = (0.0,1.0e+9)
+tspan = (0.0,1.0e+11)
 
 hasel_prob = ODEProblem(haselgrove!,u0,tspan,p)
-hasel_soln = solve(hasel_prob, alg_hints=[:stiff], reltol=1e-4)
+hasel_soln = solve(hasel_prob, alg_hints=[:stiff]) #reltol=1e-4
 
 using Plots
+plotly()
 plot(hasel_soln)
 plot(hasel_soln, vars=(1,2,3))
 
@@ -312,11 +327,41 @@ f = hasel_soln[4,:]
 x = r.*sin.(θ)
 y = r.*cos.(θ)
 
-plot(x,y)
+plot(x,y, aspect_ratio=1, legend=:none)
 
 
 #earthx = re/1.0e3.*cos([0:0.01:2*π;])
-plot!(re.*cos.([0:0.01:2*π;]),re.*sin.([0:0.01:2*π;]))
+plot!(re.*cos.([0:0.01:2*π;]),re.*sin.([0:0.01:2*π;]), aspect_ratio = 1)
+
+gridrange = [-pi/2.0:0.01:pi/2.0;]
+#thtgrid = np.arange(0.,np.pi,0.1)
+gridmag = pi/2.0.-gridrange
+rmag = re.*(cos.(gridmag)).^2
+
+#rw = 2.*ray_cmks.Re
+xmag1 = 1.0.*rmag.*cos.(gridmag)
+ymag1 = 1.0.*rmag.*sin.(gridmag)
+
+xmag2 = 2.0.*rmag.*cos.(gridmag)
+ymag2 = 2.0.*rmag.*sin.(gridmag)
+
+xmag3 = 3.0.*rmag.*cos.(gridmag)
+ymag3 = 3.0.*rmag.*sin.(gridmag)
+
+xmag4 = 4.0.*rmag.*cos.(gridmag)
+ymag4 = 4.0.*rmag.*sin.(gridmag)
+
+
+plot!(xmag4,ymag4,color = :red)
+plot!(xmag3,ymag3,color = :red)
+plot!(xmag2,ymag2,color = :red)
+plot!(xmag1,ymag1,color = :red)
+
+plot!(xmag4,-ymag4,color = :red)
+plot!(xmag3,-ymag3,color = :red)
+plot!(xmag2,-ymag2,color = :red)
+plot!(xmag1,-ymag1,color = :red)
+
 
 ##
 function lorenz!(du, u, p, t)
@@ -367,7 +412,7 @@ a = [1:5;]
 sum(a)
 
 ## type/value check
-r = re + 1.0e6
+r = re + 1.0e8
 θ = pi/4.0
 χ = 0.0
 freq = 5000.0

@@ -63,9 +63,9 @@ using DifferentialEquations
 u = function phase_refractive_index(r,θ,χ,freq)
 # u = [μ, dμdψ]
     # convert from radial angle to wave normal angle
-    dip = atan(2.0*tan(pi/2.0-θ))     	# dip angle: angle between horizontal and B field
+    dip = atan(2.0*tan(θ))     			# dip angle: angle between horizontal and B field; 11/9: fixed error tan(pi/2.0-θ) ➡ tan(θ)
     ϕ = (3.0/2.0)*pi - dip              # intermediate angle -- NOT azimuth
-    ψ = χ - ϕ							# wave normal angle: angle between wave direction and B
+    ψ = ϕ - χ							# wave normal angle: angle between wave direction and B; 11/9: fixed error (χ - ϕ) ➡ (ϕ - χ)
 
     # convert from frequency to angular frequency
     ω = 2.0*pi*freq
@@ -312,7 +312,7 @@ p = []	# f0, dμdψ, dμdr, dμdθ, dμdχ, dμdf
 tspan = (0.0,1.0e+11)
 
 hasel_prob = ODEProblem(haselgrove!,u0,tspan,p)
-hasel_soln = solve(hasel_prob, alg_hints=[:stiff]) #reltol=1e-4
+hasel_soln = solve(hasel_prob, alg_hints=[:stiff], reltol=1e-4) #reltol=1e-4
 
 using Plots
 plotly()

@@ -63,7 +63,10 @@ using DifferentialEquations
 u = function phase_refractive_index(r,θ,χ,freq)
 # u = [μ, dμdψ]
     # convert from radial angle to wave normal angle
-    dip = atan(2.0*tan(θ))     			# dip angle: angle between horizontal and B field; 11/9: fixed error tan(pi/2.0-θ) ➡ tan(θ)
+    dip = atan(2.0*tan(pi/2 - θ))     			# dip angle: angle between horizontal and B field;
+	# 11/9: fixed error tan(pi/2.0-θ) ➡ tan(θ)
+	# 11/13: no! dip = 0 when θ = π/2 ➡ tan(θ - π/2) is correct!
+	# 11/18: wrong again! Dip is defined as positive toward the North pole, i.e. should be positive in the Northern hemisphere!
     ϕ = (3.0/2.0)*pi - dip              # intermediate angle -- NOT azimuth
     ψ = ϕ - χ							# wave normal angle: angle between wave direction and B; 11/9: fixed error (χ - ϕ) ➡ (ϕ - χ)
 
@@ -78,7 +81,8 @@ u = function phase_refractive_index(r,θ,χ,freq)
 	# dipole field magnitude from Parks p. 61:
 	# B(r,λ) = μ₀M/(4πr³)*(1+3sin²λ)^(1/2)
 	# 		 = μ₀M/(4πr³)*(1+3sin²(π/2 - θ))^(1/2)
-	Bmag = B0*(re^3/(r^3))*sqrt(1+3*sin((pi/2.)-θ)*sin((pi/2.0)-θ))
+	# 		 = μ₀M/(4πr³)*(1+3cos²θ)^(1/2)
+	Bmag = B0*(re^3/(r^3))*sqrt(1+3*cos(θ)*cos(θ))
 
     # calculate electron and proton density profiles
     n_e = 1.e6*(1.8e5*exp(-4.183119*(rE-1.0471)))
@@ -294,25 +298,27 @@ end
 #haselgrove!(μ,dμdψ,r,θ,χ,freq,dμ,ddt,t)
 #haselgrove!(1.0,1.0,10000.0,pi/4.0,0.0,5000.0,[1.0,1.0,1.0,1.0],[1.0,1.0,1.0],0.0)
 
-du0 = [1.0, 1.0, 1.0, 1.0]
-u0 = [8000.0, pi/4.0, 0.0, 5000.0]
-p = []
-t0 = 0.0
-haselgrove!(du0, u0, p, t0)
-println(du0)
+# du0 = [1.0, 1.0, 1.0, 1.0]
+# u0 = [8000.0, pi/4.0, 0.0, 5000.0]
+# p = []
+# t0 = 0.0
+# haselgrove!(du0, u0, p, t0)
+# println(du0)
 
 ## ODE solver!
 #QUESTION: how does ODEProblem work?
 
 using BenchmarkTools
 using LSODA
+using Sundials
 
-u0 = [re+1.0e+6, -1.0*pi/4, 0.0, 5000.0]					# r0, θ0, χ0
+u0 = [re+1.0e+6, -1.0*pi/4, 0.0, 500.0]					# r0, θ0, χ0
 p = []	# f0, dμdψ, dμdr, dμdθ, dμdχ, dμdf
-tspan = (0.0,1.0e+11)
+tspan = (0.0,1.0e+10)
 
 hasel_prob = ODEProblem(haselgrove!,u0,tspan,p)
-hasel_soln = solve(hasel_prob, alg_hints=[:stiff], reltol=1e-4) #reltol=1e-4
+hasel_soln = solve(hasel_prob, CVODE_BDF(), reltol=1e-5) #reltol=1e-4
+# LSODA_BDF()?
 
 using Plots
 plotly()
@@ -332,6 +338,9 @@ plot(x,y, aspect_ratio=1, legend=:none)
 
 #earthx = re/1.0e3.*cos([0:0.01:2*π;])
 plot!(re.*cos.([0:0.01:2*π;]),re.*sin.([0:0.01:2*π;]), aspect_ratio = 1)
+# plot!(re.*[0:0.01:2;],re.*[0:0.01:2;], aspect_ratio = 1)
+# plot!(re.*[0:0.01:4;],re.*[0:0.005:2;], aspect_ratio = 1)
+
 
 gridrange = [-pi/2.0:0.01:pi/2.0;]
 #thtgrid = np.arange(0.,np.pi,0.1)
@@ -362,6 +371,31 @@ plot!(xmag3,-ymag3,color = :red)
 plot!(xmag2,-ymag2,color = :red)
 plot!(xmag1,-ymag1,color = :red)
 
+## calculate and plot refractive index surface
+# initial conditions
+r_test = re + 1.0e7
+θ_test = π/4.0
+ψ_test = [0:0.01:2π;]
+dip_test = atan(2.0*tan(pi/2 - θ_test))
+χ_test = ψ_test .+ 3π/2 .+ dip_test
+f_test = 5000.0
+
+# calculate μ, dμdψ
+u_test = phase_refractive_index.(r_test, θ_test, χ_test, f_test)
+u_test_r = reduce(hcat,u_test)
+u_test_r = u_test_r'
+μ_test =  u_test_r[:,1]
+dμdψ_test = u_test_r[:,2]
+
+xμ_test = μ_test.*sin.(ψ_test)
+yμ_test = μ_test.*cos.(ψ_test)
+
+xdμ_test = dμdψ_test.*sin.(ψ_test)
+ydμ_test = dμdψ_test.*cos.(ψ_test)
+
+plot(xμ_test, yμ_test, aspect_ratio = 1)
+plot(xdμ_test, ydμ_test, aspect_ratio = 1)
+
 
 ##
 function lorenz!(du, u, p, t)
@@ -372,10 +406,10 @@ end
 # call this function in a problem
 u0 = [1.0;0.0;0.0]
 tspan = (0.0,100.0)
-prob2 = ODEProblem(lorenz!,u0,tspan)
-sol2 = solve(prob2)
+prob = ODEProblem(lorenz!,u0,tspan)
+sol = solve(prob)
 
-plot(sol2,vars=(1,2,3))
+plot(sol,vars=(1,2,3))
 
 ## B-field check
 

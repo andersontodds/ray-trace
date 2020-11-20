@@ -63,10 +63,11 @@ using DifferentialEquations
 u = function phase_refractive_index(r,θ,χ,freq)
 # u = [μ, dμdψ]
     # convert from radial angle to wave normal angle
-    dip = atan(2.0*tan(pi/2 - θ))     			# dip angle: angle between horizontal and B field;
+    dip = atan(tan(pi/2 - θ))     			# dip angle: angle between horizontal and B field;
 	# 11/9: fixed error tan(pi/2.0-θ) ➡ tan(θ)
 	# 11/13: no! dip = 0 when θ = π/2 ➡ tan(θ - π/2) is correct!
 	# 11/18: wrong again! Dip is defined as positive toward the North pole, i.e. should be positive in the Northern hemisphere!
+	# 11/19: really need to check this; looks like factor of 2 was probably not correct
     ϕ = (3.0/2.0)*pi - dip              # intermediate angle -- NOT azimuth
     ψ = ϕ - χ							# wave normal angle: angle between wave direction and B; 11/9: fixed error (χ - ϕ) ➡ (ϕ - χ)
 
@@ -312,12 +313,12 @@ using BenchmarkTools
 using LSODA
 using Sundials
 
-u0 = [re+1.0e+6, -1.0*pi/4, 0.0, 500.0]					# r0, θ0, χ0
+u0 = [re+1.0e+6, -1.0*pi/4, 0.0, 5000.0]					# r0, θ0, χ0
 p = []	# f0, dμdψ, dμdr, dμdθ, dμdχ, dμdf
-tspan = (0.0,1.0e+10)
+tspan = (0.0,5.0e+9)
 
 hasel_prob = ODEProblem(haselgrove!,u0,tspan,p)
-hasel_soln = solve(hasel_prob, CVODE_BDF(), reltol=1e-5) #reltol=1e-4
+hasel_soln = solve(hasel_prob, CVODE_BDF(), reltol=1e-6) #reltol=1e-4
 # LSODA_BDF()?
 
 using Plots
@@ -371,13 +372,21 @@ plot!(xmag3,-ymag3,color = :red)
 plot!(xmag2,-ymag2,color = :red)
 plot!(xmag1,-ymag1,color = :red)
 
+θ_test = pi/3
+plot!([-2e7:1e5:2e7;].*sin(θ_test),[-2e7:1e5:2e7;].*cos(θ_test))
+x_dip = [0:1e5:1e6;].*sin(dip_test +pi/2 - θ_test)
+y_dip = [0:1e5:1e6;].*cos(dip_test +pi/2 - θ_test)
+x_dip4 = x_dip .+ 4.0*re*sin(θ_test)^2*sin(θ_test)
+y_dip4 = y_dip .+ 4.0*re*sin(θ_test)^2*cos(θ_test)
+plot!(x_dip4,y_dip4,aspect_ratio=1)
+
 ## calculate and plot refractive index surface
 # initial conditions
 r_test = re + 1.0e7
-θ_test = π/4.0
+θ_test = pi/4
 ψ_test = [0:0.01:2π;]
-dip_test = atan(2.0*tan(pi/2 - θ_test))
-χ_test = ψ_test .+ 3π/2 .+ dip_test
+dip_test = atan(tan(pi/2 - θ_test))
+χ_test = ψ_test .- 3π/2 .+ dip_test
 f_test = 5000.0
 
 # calculate μ, dμdψ
@@ -387,14 +396,21 @@ u_test_r = u_test_r'
 μ_test =  u_test_r[:,1]
 dμdψ_test = u_test_r[:,2]
 
-xμ_test = μ_test.*sin.(ψ_test)
-yμ_test = μ_test.*cos.(ψ_test)
+xμ_test = μ_test.*sin.(ψ_test .- θ_test .+ dip_test .+ π/2)
+yμ_test = μ_test.*cos.(ψ_test .- θ_test .+ dip_test .+ π/2)
+# # plot surface without rotation into B|| frame
+# xμ_test = μ_test.*sin.(ψ_test)
+# yμ_test = μ_test.*cos.(ψ_test)
 
 xdμ_test = dμdψ_test.*sin.(ψ_test)
 ydμ_test = dμdψ_test.*cos.(ψ_test)
 
 plot(xμ_test, yμ_test, aspect_ratio = 1)
 plot(xdμ_test, ydμ_test, aspect_ratio = 1)
+
+
+plot!([-30:1:30;].*cos(dip_test),[-30:1:30;].*sin(dip_test))
+plot!([-30:1:30;].*sin(θ_test+π/2),[-30:1:30;].*cos(θ_test+π/2))
 
 
 ##

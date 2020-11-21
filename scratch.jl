@@ -63,13 +63,12 @@ using DifferentialEquations
 u = function phase_refractive_index(r,θ,χ,freq)
 # u = [μ, dμdψ]
     # convert from radial angle to wave normal angle
-    dip = atan(tan(pi/2 - θ))     			# dip angle: angle between horizontal and B field;
+    dip = atan(2.0*cot(θ))     			# dip angle: angle between horizontal and B field;
 	# 11/9: fixed error tan(pi/2.0-θ) ➡ tan(θ)
 	# 11/13: no! dip = 0 when θ = π/2 ➡ tan(θ - π/2) is correct!
 	# 11/18: wrong again! Dip is defined as positive toward the North pole, i.e. should be positive in the Northern hemisphere!
 	# 11/19: really need to check this; looks like factor of 2 was probably not correct
-    ϕ = (3.0/2.0)*pi - dip              # intermediate angle -- NOT azimuth
-    ψ = ϕ - χ							# wave normal angle: angle between wave direction and B; 11/9: fixed error (χ - ϕ) ➡ (ϕ - χ)
+    ψ = (3.0/2.0)*pi - dip - χ		# wave normal angle: angle between wave direction and B; 11/9: fixed error (χ - ϕ) ➡ (ϕ - χ)
 
     # convert from frequency to angular frequency
     ω = 2.0*pi*freq
@@ -78,11 +77,14 @@ u = function phase_refractive_index(r,θ,χ,freq)
     rE = r/re
 
     # find magnetic field at (r,θ) from dipole field model
-    #Bmag = B0*((re^3)/(r^3))*sqrt(4.0-3.0*cos((pi/2.)-θ)*cos((pi/2.0)-θ))
+    # Bmag = B0*((re^3)/(r^3))*sqrt(4.0-3.0*cos((pi/2.)-θ)*cos((pi/2.0)-θ))
+	# 	   = B0*((re^3)/(r^3))*sqrt(4 - 3sin²θ)
+	# 	   ≡ B0*((re^3)/(r^3))*sqrt(1 + 3cos²θ)
 	# dipole field magnitude from Parks p. 61:
 	# B(r,λ) = μ₀M/(4πr³)*(1+3sin²λ)^(1/2)
 	# 		 = μ₀M/(4πr³)*(1+3sin²(π/2 - θ))^(1/2)
 	# 		 = μ₀M/(4πr³)*(1+3cos²θ)^(1/2)
+	# here B0*re³ = μ₀M/(4π)
 	Bmag = B0*(re^3/(r^3))*sqrt(1+3*cos(θ)*cos(θ))
 
     # calculate electron and proton density profiles
@@ -267,12 +269,13 @@ function haselgrove!(du,u,p,t)
 	μ = v[1]
 	dμdψ = v[2]
 
-    du[1] = 1/(μ^2)*(μ*cos(χ)+dμdχ*sin(χ))
-    du[2] = 1/(r*μ^2)*(μ*sin(χ)-dμdχ*cos(χ))
+	# 11/20: try dμdχ --> -1*dμdψ; these should be equal but are calcualted differently
+    du[1] = 1/(μ^2)*(μ*cos(χ)-dμdψ*sin(χ))
+    du[2] = 1/(r*μ^2)*(μ*sin(χ)+dμdψ*cos(χ))
     du[3] = 1/(r*μ^2)*(dμdθ*cos(χ)-(r*dμdr + μ)*cos(χ))
 	du[4] = 1/c*(1+(freq/μ)*dμdf)
 
-	#du = [drdt, dθdt, dχdt]
+	#du = [drdt, dθdt, dχdt, dfdt]
 
 	#println("drdt = ", drdt)
 	#println("dθdt = ", dθdt)
@@ -313,7 +316,7 @@ using BenchmarkTools
 using LSODA
 using Sundials
 
-u0 = [re+1.0e+6, -1.0*pi/4, 0.0, 5000.0]					# r0, θ0, χ0
+u0 = [re+1.0e+6, 1.0*pi/4, 0.0, 5000.0]					# r0, θ0, χ0
 p = []	# f0, dμdψ, dμdr, dμdθ, dμdχ, dμdf
 tspan = (0.0,5.0e+9)
 
@@ -372,7 +375,7 @@ plot!(xmag3,-ymag3,color = :red)
 plot!(xmag2,-ymag2,color = :red)
 plot!(xmag1,-ymag1,color = :red)
 
-θ_test = pi/3
+θ_test = pi/2
 plot!([-2e7:1e5:2e7;].*sin(θ_test),[-2e7:1e5:2e7;].*cos(θ_test))
 x_dip = [0:1e5:1e6;].*sin(dip_test +pi/2 - θ_test)
 y_dip = [0:1e5:1e6;].*cos(dip_test +pi/2 - θ_test)
@@ -382,10 +385,10 @@ plot!(x_dip4,y_dip4,aspect_ratio=1)
 
 ## calculate and plot refractive index surface
 # initial conditions
-r_test = re + 1.0e7
-θ_test = pi/4
+θ_test = pi/2
+r_test = 4.0*re*(sin(θ_test))^2
 ψ_test = [0:0.01:2π;]
-dip_test = atan(tan(pi/2 - θ_test))
+dip_test = atan(2.0*cot(θ_test))
 χ_test = ψ_test .- 3π/2 .+ dip_test
 f_test = 5000.0
 
@@ -396,17 +399,22 @@ u_test_r = u_test_r'
 μ_test =  u_test_r[:,1]
 dμdψ_test = u_test_r[:,2]
 
-xμ_test = μ_test.*sin.(ψ_test .- θ_test .+ dip_test .+ π/2)
-yμ_test = μ_test.*cos.(ψ_test .- θ_test .+ dip_test .+ π/2)
+# xμ_test = μ_test.*sin.(ψ_test .+ π/2)
+# yμ_test = μ_test.*cos.(ψ_test .+ π/2)
 # # plot surface without rotation into B|| frame
-# xμ_test = μ_test.*sin.(ψ_test)
-# yμ_test = μ_test.*cos.(ψ_test)
+xμ_test = μ_test.*sin.(ψ_test)
+yμ_test = μ_test.*cos.(ψ_test)
 
 xdμ_test = dμdψ_test.*sin.(ψ_test)
 ydμ_test = dμdψ_test.*cos.(ψ_test)
 
+xμ_test_fieldline = 4.0*(re*(sin(θ_test))^2)*sin(θ_test) .+ xμ_test.*1e5
+yμ_test_fieldline = 4.0*(re*(sin(θ_test))^2)*cos(θ_test) .+ yμ_test.*1e5
+
 plot(xμ_test, yμ_test, aspect_ratio = 1)
-plot(xdμ_test, ydμ_test, aspect_ratio = 1)
+#plot(xdμ_test, ydμ_test, aspect_ratio = 1)
+
+plot!(xμ_test_fieldline, yμ_test_fieldline, aspect_ratio = 1)
 
 
 plot!([-30:1:30;].*cos(dip_test),[-30:1:30;].*sin(dip_test))
@@ -462,14 +470,15 @@ a = [1:5;]
 sum(a)
 
 ## type/value check
-r = re + 1.0e8
+r = re + 1.0e6
 θ = pi/4.0
 χ = 0.0
 freq = 5000.0
-dip = atan(2.0*tan(pi/2.0-θ))
+dip = atan(2.0*cot(θ))
 dip*180/pi	# dip angle: angle between horizontal and B field
 ϕ = (3.0/2.0)*pi - dip              # intermediate angle -- NOT azimuth
-ψ = χ - ϕ							# wave normal angle: angle between wave direction and B
+ψ = ϕ - χ							# wave normal angle: angle between wave direction and B
+ψ*180/π
 
 # convert from frequency to angular frequency
 ω = 2.0*pi*freq
@@ -500,10 +509,14 @@ n_p = 1.e6*(1.8e5*exp(-4.183119*(rE-1.0471)))
 # define R, L, P, D, S,
 # R ≡ 1 - Σ(ωₖ²/ω²)(ω/(ω+ϵₖΩₖ))
 R = 1.0 - (ω_e2/ω^2.0)*(ω/(ω - Ω_e)) - (ω_p2/ω^2.0)*(ω/(ω + Ω_p))
+(ω_e2/ω^2.0)*(ω/(ω - Ω_e))
+(ω_p2/ω^2.0)*(ω/(ω + Ω_p))
 #println("R = ",R)
 
 # L ≡ 1 - Σ(ωₖ²/ω²)(ω/(ω-ϵₖΩₖ))
 L = 1.0 - (ω_e2/ω^2.0)*(ω/(ω + Ω_e)) - (ω_p2/ω^2.0)*(ω/(ω - Ω_p))
+(ω_e2/ω^2.0)*(ω/(ω + Ω_e))
+(ω_p2/ω^2.0)*(ω/(ω - Ω_p))
 #println("L = ",L)
 
 # P ≡ 1 - Σ(ωₖ²/ω²)

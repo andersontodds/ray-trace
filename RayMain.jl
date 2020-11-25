@@ -103,8 +103,9 @@
 	5. Run and time solver, optimize
 =#
 #const rₑ = 6378100
-re = 6.3781e6      	# radius of Earth in meters
-B0 = 3.0696381e-5   # magnitude of B field (where?) in Tesla
+c = 2.99792458e8
+re = 6.3712e6      	# radius of Earth in meters
+B0 = 3.0696381e-5   # magnitude of B field at Earth's equator surface in Tesla
 e = 1.602e-19 		# electric charge in Coulombs
 me = 9.1093e-31		# electron rest mass
 mp = 1.6726219e-27	# proton rest mass
@@ -113,12 +114,21 @@ eps = 8.854e-12 	# permittivity of free space in mks
 using DifferentialEquations
 
 # calculate phase refractive index μ
-u = function phase_refractive_index!(dμdψ,μ,r,θ,χ,freq)
+# DONE! todo: convert this function to mutating form
+# 	QUESTION: is this possible, given that phase_refractive_index!() must be called multiple times in a single ddr!() (e.g.) call, before using the result?
+# 	ANSWER: yes! see call/assignment in ddr!()
 
+u = function phase_refractive_index(r,θ,χ,freq)
+# u = [μ, dμdψ]
     # convert from radial angle to wave normal angle
-    dip = atan(2.0*tan(pi/2.0-θ))     	# dip angle: angle between horizontal and B field
-    ϕ = (3.0/2.0)*pi - dip              # intermediate angle -- NOT azimuth
-    ψ = χ - ϕ							# wave normal angle: angle between wave direction and B
+    dip = atan(2.0*cot(θ))     			# dip angle: angle between horizontal and B field;
+	# 11/9: fixed error tan(pi/2.0-θ) ➡ tan(θ)
+	# 11/13: no! dip = 0 when θ = π/2 ➡ tan(θ - π/2) is correct!
+	# 11/18: wrong again! Dip is defined as positive toward the North pole, i.e. should be positive in the Northern hemisphere!
+	# 11/19: really need to check this; looks like factor of 2 was probably not correct
+	ψ = (3.0/2.0)*pi - dip - χ
+#	ψ = χ - (3.0/2.0)*pi + dip		# wave normal angle: angle between wave direction and B; 11/9: fixed error (χ - ϕ) ➡ (ϕ - χ)
+	# NOTE 11/24/2020: Rice 1997 uses ψ = χ - 3π/2 + dip, as well as a strange method of calculating χ (see FORTRAN code on p. 112)
 
     # convert from frequency to angular frequency
     ω = 2.0*pi*freq
@@ -127,7 +137,15 @@ u = function phase_refractive_index!(dμdψ,μ,r,θ,χ,freq)
     rE = r/re
 
     # find magnetic field at (r,θ) from dipole field model
-    Bmag = B0*((re^3)/(r^3))*sqrt(4.0-3.0*cos((pi/2.)-θ)*cos((pi/2.0)-θ))
+    # Bmag = B0*((re^3)/(r^3))*sqrt(4.0-3.0*cos((pi/2.)-θ)*cos((pi/2.0)-θ))
+	# 	   = B0*((re^3)/(r^3))*sqrt(4 - 3sin²θ)
+	# 	   ≡ B0*((re^3)/(r^3))*sqrt(1 + 3cos²θ)
+	# dipole field magnitude from Parks p. 61:
+	# B(r,λ) = μ₀M/(4πr³)*(1+3sin²λ)^(1/2)
+	# 		 = μ₀M/(4πr³)*(1+3sin²(π/2 - θ))^(1/2)
+	# 		 = μ₀M/(4πr³)*(1+3cos²θ)^(1/2)
+	# here B0*re³ = μ₀M/(4π)
+	Bmag = B0*(re^3/(r^3))*sqrt(1+3*cos(θ)*cos(θ))
 
     # calculate electron and proton density profiles
     n_e = 1.e6*(1.8e5*exp(-4.183119*(rE-1.0471)))
@@ -145,28 +163,28 @@ u = function phase_refractive_index!(dμdψ,μ,r,θ,χ,freq)
 
 	# define R, L, P, D, S,
 	# R ≡ 1 - Σ(ωₖ²/ω²)(ω/(ω+ϵₖΩₖ))
-	R = 1.0 - (ω_e2/ω^2)*(ω/(ω - Ω_e)) - (ω_p2/ω^2)*(ω/(ω + Ω_p))
-	print("R = ",R,"\n")
+	R = 1.0 - (ω_e2/ω^2.0)*(ω/(ω - Ω_e)) - (ω_p2/ω^2.0)*(ω/(ω + Ω_p))
+	#println("R = ",R)
 
 	# L ≡ 1 - Σ(ωₖ²/ω²)(ω/(ω-ϵₖΩₖ))
-	L = 1.0 - (ω_e2/ω^2)*(ω/(ω + Ω_e)) - (ω_p2/ω^2)*(ω/(ω - Ω_p))
-	print("L = ",L,"\n")
+	L = 1.0 - (ω_e2/ω^2.0)*(ω/(ω + Ω_e)) - (ω_p2/ω^2.0)*(ω/(ω - Ω_p))
+	#println("L = ",L)
 
 	# P ≡ 1 - Σ(ωₖ²/ω²)
-	P = 1.0 - (ω_e2/ω^2) - (ω_p2/ω^2)
-	print("P = ",P,"\n")
+	P = 1.0 - (ω_e2/ω^2.0) - (ω_p2/ω^2.0)
+	#println("P = ",P)
 
 	# D ≡ ½(R-L); S ≡ ½(R+L)
-	D = (R - L)/2
-	S = (R + L)/2
+	D = (R - L)/2.0
+	S = (R + L)/2.0
 
 	# define parts of dispersion relation
 	# Aμ⁴ - Bμ² + C = 0
 	# A = Ssin²ψ + Pcos²ψ
-	A = S*sin(ψ)^2 + P*cos(ψ)^2
+	A = S*sin(ψ)^2.0 + P*cos(ψ)^2.0
 
 	# B = RLsin²ψ + PS(1 + cos²ψ)
-	B = R*L*sin(ψ)^2 + P*S*(1+cos(ψ)^2)
+	B = R*L*sin(ψ)^2.0 + P*S*(1.0+cos(ψ)^2.0)
 
 	# C  = PRL
 	C = P*R*L
@@ -175,95 +193,166 @@ u = function phase_refractive_index!(dμdψ,μ,r,θ,χ,freq)
 	# μ² = (B +- F)/2A
 	# where F² = (RL-PS)²sin⁴ψ + 4P²D²cos²ψ
 	#QUESTION: is it faster to (a) solve for F², then sqrt(); or (b) solve for F directly? (a) requires fewer sqrt() calls
-	F2 = (R*L - P*S)^2*sin(ψ)^4 + 4*(P*D*cos(ψ))^2
+	F2 = (R*L - P*S)^2.0*sin(ψ)^4.0 + 4.0*(P*D*cos(ψ))^2.0
 	F = sqrt(F2)
 
-	μ2_minus = (B - F)/(2*A)
-	μ_minus = sqrt(μ2_minus)
-	μ2_plus = (B + F)/(2*A)
-	μ_plus = sqrt(μ2_plus)
+	# Rice 1997: typical solution to dispersion relation with quadratic formula
+	μ2_minus = (B - F)/(2.0*A)
+	μ2_plus = (B + F)/(2.0*A)
 
-	# Electron whistler case: ψ = 0, μ² = R; this is the μ_minus case
-	μ = μ_minus
+	# Bortnik 2004:
+	# if B > 0
+	# 	μ2_minus = (B - F)/(2.0*A)
+	# else
+	# 	μ2_plus = (2.0*C)/(B + F)
+	# end
+
+
+	μ_minus = try
+		sqrt(abs(μ2_minus))	# abs() is not physical! for test only
+
+	catch err
+		if isa(err,DomainError)
+			println("DomainError in μ_minus!")
+			println("B=", B)
+			println("F=", F)
+			println("A=", A)
+		else
+			# println(err)
+		end
+	end
+
+	μ_plus = try
+		sqrt(abs(μ2_plus)) # abs() is not physical! for test only
+
+	catch err
+		if isa(err,DomainError)
+			# println("DomainError in μ_plus!")
+			# println("B=", B)
+			# println("F=", F)
+			# println("A=", A)
+		else
+			# println(err)
+		end
+	end
+
+
+
+	# Electron whistler case: ψ = 0, μ² = R; this is the μ_plus case
+	#μ = μ_minus		# EMIC case
+	μ = μ_plus		# electron whistler case
 
 	# Find dA/dψ, dB/dψ, dC/dψ, dμ/dψ
 	dAdψ = 2.0*(S-P)*sin(ψ)*cos(ψ)
 	dBdψ = 2.0*(R*L-P*S)*sin(ψ)*cos(ψ)
     dCdψ = 0.0
-    dμdψ = ((μ^4)*dAdψ-(μ^2)*dBdψ+dCdψ)/(4.0*A*(μ^3)-2.0*B*μ)
+    #dμdψ = ((μ^4.0)*dAdψ-(μ^2.0)*dBdψ+dCdψ)/(4.0*A*(μ^3.0)-2.0*B*μ)
+
+	dFdψ = 1/(2.0*F)*((R*L-P*S)^2 * 4*sin(ψ)^3*cos(ψ) - 8*(P*D)^2*sin(ψ)*cos(ψ))
+	#dFdψ = sqrt(abs((R*L-P*S)^2 * 4*sin(ψ)^3*cos(ψ) - 8*(P*D)^2*sin(ψ)*cos(ψ)))
+	dμdψ = 1/(2.0*μ)*((dBdψ + dFdψ)/(2*A) - 2*dAdψ*(B + F)/(2*A^2))
+	# NOTE 11/24/2020: from Rice 1997; choose '+' for (B +- F) and (dBdψ +- dFdψ)
 
 	#DEBUG check values
-	print("μ = ",μ,"\n")
-	print("dμdψ = ", dμdψ,"\n")
+	#println("μ = ",μ)
+	#println("dμdψ = ", dμdψ)
 
+	# non-mutating output
 	u = [μ,dμdψ]
 
 end
 
 # Derivatives of phase refractive index w.r.t. r, θ, χ,
 # calculate derivative of μ w.r.t. r
-function ddr!(u,r,θ,χ,freq,dμdr)
-	μ,dμdψ = u			# unpack
+dμdr = function ddr(r,θ,χ,freq)
+	#μ,dμdψ = u			# unpack
 	dr = 1.0e-11		# r step size
 
-	μ_l = phase_refractive_index!(dμdψ,μ,r-dr/2.0,θ,χ,freq)
-	μ_r = phase_refractive_index!(dμdψ,μ,r+dr/2.0,θ,χ,freq)
+	μ_l = phase_refractive_index(r-dr/2.0,θ,χ,freq)
+	#μ_l = μ
+	μ_r = phase_refractive_index(r+dr/2.0,θ,χ,freq)
+	#μ_r = μ
 
 	dμdr = (μ_r[1] - μ_l[1])/dr
 end
 
-function ddθ!(u,r,θ,χ,freq,dμdθ)
-	μ,dμdψ = u			# unpack
+dμdθ = function ddθ(r,θ,χ,freq)
+	#μ,dμdψ = u			# unpack
 	dθ = 1.0e-11		# θ step size
 
-	μ_l = phase_refractive_index!(dμdψ,μ,r,θ-dθ/2.0,χ,freq)
-	μ_r = phase_refractive_index!(dμdψ,μ,r,θ+dθ/2.0,χ,freq)
+	μ_l = phase_refractive_index(r,θ-dθ/2.0,χ,freq)
+	#μ_l = μ
+	#println("μ_l = ", μ)
+	μ_r = phase_refractive_index(r,θ+dθ/2.0,χ,freq)
+	#μ_r = μ
+	#println("μ_r = ", μ)
 
 	dμdθ = (μ_r[1] - μ_l[1])/dθ
 end
 
-function ddχ!(u,r,θ,χ,freq,dμdχ)
-	μ,dμdψ = u			# unpack
+dμdχ = function ddχ(r,θ,χ,freq)
+	#μ,dμdψ = u			# unpack
 	dχ = 1.0e-11		# χ step size
 
-	μ_l = phase_refractive_index!(dμdψ,μ,r,θ,χ-dχ/2.0,freq)
-	μ_r = phase_refractive_index!(dμdψ,μ,r,θ,χ-dχ/2.0,freq)
+	μ_l = phase_refractive_index(r,θ,χ-dχ/2.0,freq)
+	#μ_l = μ
+	μ_r = phase_refractive_index(r,θ,χ+dχ/2.0,freq) # NOTE Nov 3: corrected error 'χ-dχ/2.0'➡'χ+dχ/2.0'
+	#μ_r = μ
 
 	dμdχ = (μ_r[1] - μ_l[1])/dχ
 end
 
-function ddf!(u,r,θ,χ,freq,dμdf)
-	μ,dμdψ = u			# unpack
+dμdf = function ddf(r,θ,χ,freq)
+	#μ,dμdψ = u			# unpack
 	df = 1.0e-5		# f step size
 
-	μ_l = phase_refractive_index!(dμdψ,μ,r,θ,χ,freq-df/2.0)
-	μ_r = phase_refractive_index!(dμdψ,μ,r,θ,χ,freq+df/2.0)
+	μ_l = phase_refractive_index(r,θ,χ,freq-df/2.0)
+	#μ_l = μ
+	μ_r = phase_refractive_index(r,θ,χ,freq+df/2.0)
+	#μ_r = μ
 
 	dμdf = (μ_r[1] - μ_l[1])/df
 end
 
 # calculate derivatives w.r.t. time
-function haselgrove!(μ,dμdψ,r,θ,χ,freq,t,dμ,ddt)
 
-	dμdr,dμdθ,dμdχ,dμdf = dμ		# unpack dμ
-	u = [μ, dμdψ]
+# calculate derivatives w.r.t. time
+function haselgrove!(du,u,p,t)
+# 	du = drdt, dθdt, dχdt, dfdt
+# 	u = r, θ, χ, f
+#  	p = freq, μ, dμdψ, dμdr, dμdθ, dμdχ, dμdf
+# 		^ this compiles and runs, but parameters
+# 	t = time
 
-	dμdr = ddr!(u,r,θ,χ,freq,dμdr)
-	dμdθ = ddθ!(u,r,θ,χ,freq,dμdθ)
-	dμdχ = ddχ!(u,r,θ,χ,freq,dμdχ)
-	dμdf = ddf!(u,r,θ,χ,freq,dμdf)
+	r, θ, χ, freq = u 						# unpack u
+	#freq = p[1] 	# unpack p
 
+	dμdr = ddr(r,θ,χ,freq)			# mutating form: ddr!([μ,dμdψ],r,θ,χ,freq,dμdr)
+	dμdθ = ddθ(r,θ,χ,freq)			# calls phase_refractive_index(r,θ,χ,freq)
+	dμdχ = ddχ(r,θ,χ,freq)
+	dμdf = ddf(r,θ,χ,freq)
 
-    drdt = 1/(μ^2)*(μ*cos(χ)+dμdχ*sin(χ))
-    dθdt = 1/(r*μ^2)*(μ*sin(χ)-dμdχ*cos(χ))
-    dχdt = 1/(r*μ^2)*(dμdθ*cos(χ)-(r*dμdr + μ)*cos(χ))
+	v = phase_refractive_index(r,θ,χ,freq)
+	μ = v[1]
+	dμdψ = v[2]
 
-	ddt = [drdt, dθdt, dχdt]
+	# 11/20: try dμdχ --> -1*dμdψ; these should be equal but are calcualted differently
+    du[1] = 1/(μ^2)*(μ*cos(χ)-dμdψ*sin(χ))
+    du[2] = 1/(r*μ^2)*(μ*sin(χ)+dμdψ*cos(χ))
+    du[3] = 1/(r*μ^2)*(dμdθ*cos(χ)-(r*dμdr + μ)*sin(χ))
+	du[4] = 1/c*(1+(freq/μ)*dμdf)
+
+	#du = [drdt, dθdt, dχdt, dfdt]
+
+	#println("drdt = ", drdt)
+	#println("dθdt = ", dθdt)
+	#println("dχdt = ", dχdt)
+
 
 	#DEBUG check values
-	print("drdt = ",drdt,"\n")
-	print("dθdt = ",dθdt,"\n")
-	print("dχdt = ",dχdt,"\n")
+	#println("drdt = ",drdt)
+	#println("dθdt = ",dθdt)
+	#println("dχdt = ",dχdt)
 
 
     # dμdψ = 1/(2*μ)*((dBdψ + dFdψ)/(2*A) - 2*dAdψ*(B+F)/(2*A^2))
@@ -277,7 +366,7 @@ function haselgrove!(μ,dμdψ,r,θ,χ,freq,t,dμ,ddt)
 end
 
 #DEBUG check values
-haselgrove!(1.0,1.0,10000.0,pi/4.0,0.0,5000.0,0.0,[1.0,1.0,1.0,1.0],[1.0,1.0,1.0])
+#haselgrove!(1.0,1.0,10000.0,pi/4.0,0.0,5000.0,0.0,[1.0,1.0,1.0,1.0],[1.0,1.0,1.0])
 
 
 ## ODE solver calls
@@ -285,3 +374,33 @@ haselgrove!(1.0,1.0,10000.0,pi/4.0,0.0,5000.0,0.0,[1.0,1.0,1.0,1.0],[1.0,1.0,1.0
 
 
 ## Plot results
+using BenchmarkTools
+using LSODA
+using Sundials
+
+u0 = [re+1.0e+6, 1.0*pi/4, 0.0, 5000.0]					# r0, θ0, χ0
+p = []	# f0, dμdψ, dμdr, dμdθ, dμdχ, dμdf
+tspan = (0.0,5.0e+9)
+
+hasel_prob = ODEProblem(haselgrove!,u0,tspan,p)
+hasel_soln = solve(hasel_prob, CVODE_BDF(), reltol=1e-7)
+
+using Plots
+plotly()
+plot(hasel_soln)
+plot(hasel_soln, vars=(1,2,3))
+
+t = hasel_soln.t
+r = hasel_soln[1,:]
+θ = hasel_soln[2,:]
+χ = hasel_soln[3,:]
+f = hasel_soln[4,:]
+
+x = r.*sin.(θ)
+y = r.*cos.(θ)
+
+plot(x,y, aspect_ratio=1, legend=:none)
+
+
+#earthx = re/1.0e3.*cos([0:0.01:2*π;])
+plot!(re.*cos.([0:0.01:2*π;]),re.*sin.([0:0.01:2*π;]), aspect_ratio = 1)

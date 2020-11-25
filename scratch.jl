@@ -68,7 +68,9 @@ u = function phase_refractive_index(r,θ,χ,freq)
 	# 11/13: no! dip = 0 when θ = π/2 ➡ tan(θ - π/2) is correct!
 	# 11/18: wrong again! Dip is defined as positive toward the North pole, i.e. should be positive in the Northern hemisphere!
 	# 11/19: really need to check this; looks like factor of 2 was probably not correct
-    ψ = (3.0/2.0)*pi - dip - χ		# wave normal angle: angle between wave direction and B; 11/9: fixed error (χ - ϕ) ➡ (ϕ - χ)
+	ψ = (3.0/2.0)*pi - dip - χ
+#	ψ = χ - (3.0/2.0)*pi + dip		# wave normal angle: angle between wave direction and B; 11/9: fixed error (χ - ϕ) ➡ (ϕ - χ)
+	# NOTE 11/24/2020: Rice 1997 uses ψ = χ - 3π/2 + dip, as well as a strange method of calculating χ (see FORTRAN code on p. 112)
 
     # convert from frequency to angular frequency
     ω = 2.0*pi*freq
@@ -186,7 +188,12 @@ u = function phase_refractive_index(r,θ,χ,freq)
 	dAdψ = 2.0*(S-P)*sin(ψ)*cos(ψ)
 	dBdψ = 2.0*(R*L-P*S)*sin(ψ)*cos(ψ)
     dCdψ = 0.0
-    dμdψ = ((μ^4.0)*dAdψ-(μ^2.0)*dBdψ+dCdψ)/(4.0*A*(μ^3.0)-2.0*B*μ)
+    #dμdψ = ((μ^4.0)*dAdψ-(μ^2.0)*dBdψ+dCdψ)/(4.0*A*(μ^3.0)-2.0*B*μ)
+
+	dFdψ = 1/(2.0*F)*((R*L-P*S)^2 * 4*sin(ψ)^3*cos(ψ) - 8*(P*D)^2*sin(ψ)*cos(ψ))
+	#dFdψ = sqrt(abs((R*L-P*S)^2 * 4*sin(ψ)^3*cos(ψ) - 8*(P*D)^2*sin(ψ)*cos(ψ)))
+	dμdψ = 1/(2.0*μ)*((dBdψ + dFdψ)/(2*A) - 2*dAdψ*(B + F)/(2*A^2))
+	# NOTE 11/24/2020: from Rice 1997; choose '+' for (B +- F) and (dBdψ +- dFdψ)
 
 	#DEBUG check values
 	#println("μ = ",μ)
@@ -272,7 +279,7 @@ function haselgrove!(du,u,p,t)
 	# 11/20: try dμdχ --> -1*dμdψ; these should be equal but are calcualted differently
     du[1] = 1/(μ^2)*(μ*cos(χ)-dμdψ*sin(χ))
     du[2] = 1/(r*μ^2)*(μ*sin(χ)+dμdψ*cos(χ))
-    du[3] = 1/(r*μ^2)*(dμdθ*cos(χ)-(r*dμdr + μ)*cos(χ))
+    du[3] = 1/(r*μ^2)*(dμdθ*cos(χ)-(r*dμdr + μ)*sin(χ))
 	du[4] = 1/c*(1+(freq/μ)*dμdf)
 
 	#du = [drdt, dθdt, dχdt, dfdt]
@@ -316,12 +323,12 @@ using BenchmarkTools
 using LSODA
 using Sundials
 
-u0 = [re+1.0e+6, 1.0*pi/4, 0.0, 5000.0]					# r0, θ0, χ0
+u0 = [re+1.0e+6, 1.0*pi/4, 0.0, 1000.0]					# r0, θ0, χ0
 p = []	# f0, dμdψ, dμdr, dμdθ, dμdχ, dμdf
 tspan = (0.0,5.0e+9)
 
 hasel_prob = ODEProblem(haselgrove!,u0,tspan,p)
-hasel_soln = solve(hasel_prob, CVODE_BDF(), reltol=1e-6) #reltol=1e-4
+hasel_soln = solve(hasel_prob, CVODE_BDF(), reltol=1e-7) #reltol=1e-4
 # LSODA_BDF()?
 
 using Plots
@@ -329,6 +336,7 @@ plotly()
 plot(hasel_soln)
 plot(hasel_soln, vars=(1,2,3))
 
+t = hasel_soln.t
 r = hasel_soln[1,:]
 θ = hasel_soln[2,:]
 χ = hasel_soln[3,:]
@@ -547,3 +555,13 @@ F = sqrt(F2)
 
 μ2_minus = (B - F)/(2.0*A)
 μ2_plus = (B + F)/(2.0*A)
+
+
+##
+hbi = 1.0e6
+b = -π/3
+re
+α = acos((re*sin(b)^2.0 + cos(b)*((re + hbi)^2.0 - re^2.0 * sin(b)^2.0)^(0.5))/(re + hbi))
+α*180/π
+chi = b - α
+chi*180/π

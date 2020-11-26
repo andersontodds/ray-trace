@@ -68,7 +68,9 @@ u = function phase_refractive_index(r,θ,χ,freq)
 	# 11/13: no! dip = 0 when θ = π/2 ➡ tan(θ - π/2) is correct!
 	# 11/18: wrong again! Dip is defined as positive toward the North pole, i.e. should be positive in the Northern hemisphere!
 	# 11/19: really need to check this; looks like factor of 2 was probably not correct
-	ψ = (3.0/2.0)*pi - dip - χ
+#	ψ = 2*π - (3π/2 - dip - χ) 		# this should be ≡ to the below, but the plotted ray paths are not all that similar!
+	ψ = π/2.0 + dip + χ
+	#ψ = (3.0/2.0)*pi - dip - χ
 #	ψ = χ - (3.0/2.0)*pi + dip		# wave normal angle: angle between wave direction and B; 11/9: fixed error (χ - ϕ) ➡ (ϕ - χ)
 	# NOTE 11/24/2020: Rice 1997 uses ψ = χ - 3π/2 + dip, as well as a strange method of calculating χ (see FORTRAN code on p. 112)
 
@@ -393,8 +395,8 @@ plot!(x_dip4,y_dip4,aspect_ratio=1)
 
 ## calculate and plot refractive index surface
 # initial conditions
-θ_test = pi/2
-r_test = 4.0*re*(sin(θ_test))^2
+θ_test = pi/3
+r_test = 2.0*re*(sin(θ_test))^2
 ψ_test = [0:0.01:2π;]
 dip_test = atan(2.0*cot(θ_test))
 χ_test = ψ_test .- 3π/2 .+ dip_test
@@ -565,3 +567,36 @@ re
 α*180/π
 chi = b - α
 chi*180/π
+
+
+## plot magnetic field strength
+# both plots: need to figure out how plot a log scale surface
+histogram2d(randn(10000),randn(10000),nbins = 20)
+
+plot(contourf(randn(10,20)))
+
+# r,θ: need to figure out how to convert grid to x,y
+r_gridmag = re:1e5:5e7
+θ_gridmag = 0:0.01:2*π
+f_bmag(r_gridmag, θ_gridmag) = begin
+	B0*(re^3/(r_gridmag^3))*sqrt(1+3*cos(θ_gridmag)*cos(θ_gridmag))
+end
+R_gridmag = repeat(reshape(r_gridmag,1,:), length(θ_gridmag), 1)
+T_gridmag = repeat(θ_gridmag, 1, length(r_gridmag))
+Z_gridmag = map(f_bmag, R_gridmag, T_gridmag)
+p1 = contour(r_gridmag, θ_gridmag, f_bmag, fill = true)
+p2 = contour(r_gridmag, θ_gridmag, Z_gridmag)
+plot(p1,p2)
+
+# x,y: need to figure out how to exclude area inside Earth from grid
+x_gridmag = -5e7:1e5:5e7
+y_gridmag = x_gridmag
+f_bmag_xy(x_gridmag, y_gridmag) = begin
+	B0*(re^3/(sqrt(x_gridmag^2 + y_gridmag^2)^3))*sqrt(1+3*cos(atan(x_gridmag/y_gridmag))^2)
+end
+X_gridmag = repeat(reshape(x_gridmag,1,:), length(y_gridmag), 1)
+Y_gridmag = repeat(y_gridmag, 1, length(x_gridmag))
+Z_gridmag_xy = map(f_bmag_xy, X_gridmag, Y_gridmag)
+p1_xy = contour(x_gridmag, y_gridmag, f_bmag_xy, fill = (true,cgrad(scale = :log)))
+p2_xy = contour(x_gridmag, y_gridmag, Z_gridmag_xy)
+plot(p1,p2)

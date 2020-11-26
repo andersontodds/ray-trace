@@ -126,7 +126,8 @@ u = function phase_refractive_index(r,θ,χ,freq)
 	# 11/13: no! dip = 0 when θ = π/2 ➡ tan(θ - π/2) is correct!
 	# 11/18: wrong again! Dip is defined as positive toward the North pole, i.e. should be positive in the Northern hemisphere!
 	# 11/19: really need to check this; looks like factor of 2 was probably not correct
-	ψ = (3.0/2.0)*pi - dip - χ
+#	ψ = 2*π - (3π/2 - dip - χ) 		# this should be ≡ to the below, but the plotted ray paths are not all that similar!
+	ψ = π/2.0 + dip + χ
 #	ψ = χ - (3.0/2.0)*pi + dip		# wave normal angle: angle between wave direction and B; 11/9: fixed error (χ - ϕ) ➡ (ϕ - χ)
 	# NOTE 11/24/2020: Rice 1997 uses ψ = χ - 3π/2 + dip, as well as a strange method of calculating χ (see FORTRAN code on p. 112)
 
@@ -399,8 +400,5 @@ f = hasel_soln[4,:]
 x = r.*sin.(θ)
 y = r.*cos.(θ)
 
-plot(x,y, aspect_ratio=1, legend=:none)
-
-
-#earthx = re/1.0e3.*cos([0:0.01:2*π;])
-plot!(re.*cos.([0:0.01:2*π;]),re.*sin.([0:0.01:2*π;]), aspect_ratio = 1)
+plot(re.*cos.([0:0.01:2*π;]),re.*sin.([0:0.01:2*π;]), aspect_ratio = 1, legend=:none)
+plot!(x,y, aspect_ratio=1)

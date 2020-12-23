@@ -96,6 +96,10 @@
 =#
 
 #=TODO:
+	0. Rewrite particle model for realistic plasmasphere! See Sousa thesis p. 39 for plots of electron density models.
+		a. see GCPM at plasmasphere.nasa.gov/models/
+		b. the simplified GCPM looks like it could be approximated analytically as an exponential(?) decay multiplied by a dipole field equation
+		i.e. n_e = a*exp(-b*r)*c*sqrt(1 + 3cos²θ)
 	1. Get functions and argument-passing working with single input (i.e. non-vectorized, non-looping)
 	2. Vectorize!
 	3. Run and time solver
@@ -121,11 +125,8 @@ using DifferentialEquations
 u = function phase_refractive_index(r,θ,χ,freq)
 # u = [μ, dμdψ]
     # convert from radial angle to wave normal angle
-    dip = atan(2.0*cot(θ))     			# dip angle: angle between horizontal and B field;
-	# 11/9: fixed error tan(pi/2.0-θ) ➡ tan(θ)
-	# 11/13: no! dip = 0 when θ = π/2 ➡ tan(θ - π/2) is correct!
-	# 11/18: wrong again! Dip is defined as positive toward the North pole, i.e. should be positive in the Northern hemisphere!
-	# 11/19: really need to check this; looks like factor of 2 was probably not correct
+    dip = atan(2.0*cot(θ)) # dip angle: angle between horizontal and B field;
+
 #	ψ = 2*π - (3π/2 - dip - χ) 		# this should be ≡ to the below, but the plotted ray paths are not all that similar!
 	ψ = π/2.0 + dip + χ
 #	ψ = χ - (3.0/2.0)*pi + dip		# wave normal angle: angle between wave direction and B; 11/9: fixed error (χ - ϕ) ➡ (ϕ - χ)
@@ -193,7 +194,6 @@ u = function phase_refractive_index(r,θ,χ,freq)
 	# solve the dispersion relation for μ:
 	# μ² = (B +- F)/2A
 	# where F² = (RL-PS)²sin⁴ψ + 4P²D²cos²ψ
-	#QUESTION: is it faster to (a) solve for F², then sqrt(); or (b) solve for F directly? (a) requires fewer sqrt() calls
 	F2 = (R*L - P*S)^2.0*sin(ψ)^4.0 + 4.0*(P*D*cos(ψ))^2.0
 	F = sqrt(F2)
 

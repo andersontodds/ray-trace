@@ -68,17 +68,15 @@ u = function phase_refractive_index(r,θ,χ,freq)
 	# 11/13: no! dip = 0 when θ = π/2 ➡ tan(θ - π/2) is correct!
 	# 11/18: wrong again! Dip is defined as positive toward the North pole, i.e. should be positive in the Northern hemisphere!
 	# 11/19: really need to check this; looks like factor of 2 was probably not correct
-#	ψ = 2*π - (3π/2 - dip - χ) 		# this should be ≡ to the below, but the plotted ray paths are not all that similar!
-	ψ = π/2.0 + dip + χ
-	#ψ = (3.0/2.0)*pi - dip - χ
-#	ψ = χ - (3.0/2.0)*pi + dip		# wave normal angle: angle between wave direction and B; 11/9: fixed error (χ - ϕ) ➡ (ϕ - χ)
+	#ψ = 2*π - (3π/2 - dip - χ) 		# this should be ≡ to the below, but the plotted ray paths are not all that similar!
+	#ψ = π/2.0 + dip + χ
+	#ψ = χ - π/2 - dip
+	ψ = (3.0/2.0)*pi - dip - χ
+	#ψ = χ - (3.0/2.0)*pi + dip		# wave normal angle: angle between wave vector and B; 11/9: fixed error (χ - ϕ) ➡ (ϕ - χ)
 	# NOTE 11/24/2020: Rice 1997 uses ψ = χ - 3π/2 + dip, as well as a strange method of calculating χ (see FORTRAN code on p. 112)
 
     # convert from frequency to angular frequency
     ω = 2.0*pi*freq
-
-    # convert radius to fraction of Earth radius
-    rE = r/re
 
     # find magnetic field at (r,θ) from dipole field model
     # Bmag = B0*((re^3)/(r^3))*sqrt(4.0-3.0*cos((pi/2.)-θ)*cos((pi/2.0)-θ))
@@ -92,8 +90,13 @@ u = function phase_refractive_index(r,θ,χ,freq)
 	Bmag = B0*(re^3/(r^3))*sqrt(1+3*cos(θ)*cos(θ))
 
     # calculate electron and proton density profiles
-    n_e = 1.e6*(1.8e5*exp(-4.183119*(rE-1.0471)))
-	n_p = 1.e6*(1.8e5*exp(-4.183119*(rE-1.0471)))
+	# 12/22: approximate plasmasphere with θ-dependent n_e, n_p
+	#n_e = 1e3*(1 + cos.(θ).^2).*(1.e6*(1.8e5.*exp.(-4.183119*((r./re).-1.0471))))
+	#n_p = 1e3*(1 + cos.(θ).^2).*(1.e6*(1.8e5.*exp.(-4.183119*((r./re).-1.0471))))
+	n_e = (1 + 1e3*cos.(θ).^2).*(1.e6*(1.8e5.*exp.(-4.183119*((r./re).-1.0471))))
+	n_p = (1 + 1e3*cos.(θ).^2).*(1.e6*(1.8e5.*exp.(-4.183119*((r./re).-1.0471))))
+	#n_e = 1.e6*(1.8e5*exp(-4.183119*((r/re)-1.0471)))
+	#n_p = 1.e6*(1.8e5*exp(-4.183119*((r/re)-1.0471)))
 
 	# electron plasma angular frequency squared
     ω_e2 = (n_e*(e^2))/(eps*me)
@@ -125,10 +128,10 @@ u = function phase_refractive_index(r,θ,χ,freq)
 	# define parts of dispersion relation
 	# Aμ⁴ - Bμ² + C = 0
 	# A = Ssin²ψ + Pcos²ψ
-	A = S*sin(ψ)^2.0 + P*cos(ψ)^2.0
+	A = S*sin(ψ)^2.0 + P*cos(ψ)^2.0	# ψ = π/2: A = S
 
 	# B = RLsin²ψ + PS(1 + cos²ψ)
-	B = R*L*sin(ψ)^2.0 + P*S*(1.0+cos(ψ)^2.0)
+	B = R*L*sin(ψ)^2.0 + P*S*(1.0+cos(ψ)^2.0) # ψ = π/2: B = RL + PS
 
 	# C  = PRL
 	C = P*R*L
@@ -138,11 +141,16 @@ u = function phase_refractive_index(r,θ,χ,freq)
 	# where F² = (RL-PS)²sin⁴ψ + 4P²D²cos²ψ
 	#QUESTION: is it faster to (a) solve for F², then sqrt(); or (b) solve for F directly? (a) requires fewer sqrt() calls
 	F2 = (R*L - P*S)^2.0*sin(ψ)^4.0 + 4.0*(P*D*cos(ψ))^2.0
+		# ψ = π/2: F² = (RL - PS)² ➡ F = RL - PS
 	F = sqrt(F2)
 
 	# Rice 1997: typical solution to dispersion relation with quadratic formula
 	μ2_minus = (B - F)/(2.0*A)
 	μ2_plus = (B + F)/(2.0*A)
+		# ψ = π/2: μ²₊ = (RL + PS + RL - PS)/2A
+		# 			   = RL/A
+		# 			   = RL/S
+		# 			   = 2RL/(R + L)
 
 	# Bortnik 2004:
 	# if B > 0
@@ -187,14 +195,15 @@ u = function phase_refractive_index(r,θ,χ,freq)
 	μ = μ_plus		# electron whistler case
 
 	# Find dA/dψ, dB/dψ, dC/dψ, dμ/dψ
-	dAdψ = 2.0*(S-P)*sin(ψ)*cos(ψ)
-	dBdψ = 2.0*(R*L-P*S)*sin(ψ)*cos(ψ)
+	dAdψ = 2.0*(S-P)*sin(ψ)*cos(ψ) 		# ψ = π/2: dAdψ = 0
+	dBdψ = 2.0*(R*L-P*S)*sin(ψ)*cos(ψ) 	# ψ = π/2: dBdψ = 0
     dCdψ = 0.0
     #dμdψ = ((μ^4.0)*dAdψ-(μ^2.0)*dBdψ+dCdψ)/(4.0*A*(μ^3.0)-2.0*B*μ)
 
-	dFdψ = 1/(2.0*F)*((R*L-P*S)^2 * 4*sin(ψ)^3*cos(ψ) - 8*(P*D)^2*sin(ψ)*cos(ψ))
+	dFdψ = 1/(2.0*F)*((R*L-P*S)^2 * 4*sin(ψ)^3*cos(ψ) - 8*(P*D)^2*sin(ψ)*cos(ψ)) # ψ = π/2: dFdψ = 0
 	#dFdψ = sqrt(abs((R*L-P*S)^2 * 4*sin(ψ)^3*cos(ψ) - 8*(P*D)^2*sin(ψ)*cos(ψ)))
 	dμdψ = 1/(2.0*μ)*((dBdψ + dFdψ)/(2*A) - 2*dAdψ*(B + F)/(2*A^2))
+		# ψ = π/2: dμdψ = 0
 	# NOTE 11/24/2020: from Rice 1997; choose '+' for (B +- F) and (dBdψ +- dFdψ)
 
 	#DEBUG check values
@@ -279,8 +288,8 @@ function haselgrove!(du,u,p,t)
 	dμdψ = v[2]
 
 	# 11/20: try dμdχ --> -1*dμdψ; these should be equal but are calcualted differently
-    du[1] = 1/(μ^2)*(μ*cos(χ)-dμdψ*sin(χ))
-    du[2] = 1/(r*μ^2)*(μ*sin(χ)+dμdψ*cos(χ))
+    du[1] = 1/(μ^2)*(μ*cos(χ)+dμdψ*sin(χ))
+    du[2] = 1/(r*μ^2)*(μ*sin(χ)-dμdψ*cos(χ))
     du[3] = 1/(r*μ^2)*(dμdθ*cos(χ)-(r*dμdr + μ)*sin(χ))
 	du[4] = 1/c*(1+(freq/μ)*dμdf)
 
@@ -318,6 +327,37 @@ end
 # haselgrove!(du0, u0, p, t0)
 # println(du0)
 
+## callbacks!
+# re_cb: terminate when ray intersects Earth surface
+function re_term_condition(u,t,integrator)
+	u[1] - re
+end
+
+# function μ2_term_condition(u,t,integrator)
+# 	body
+# end
+
+function terminate_affect!(integrator)
+	terminate!(integrator)
+end
+
+re_cb = ContinuousCallback(re_term_condition,terminate_affect!)
+
+# saveμ_cb: save μ, dμ values at each timestep
+function save_func(u,t,integrator)
+	r, θ, χ, f = u
+	v = phase_refractive_index(r, θ, χ, f)
+	dip = atan(2.0*cot(θ))
+	ψ = π/2.0 + dip + χ
+	vcat(v,dip,ψ)
+end
+
+saved_μ = SavedValues(Float64, Array{Float64,1})
+saveμ_cb = SavingCallback(save_func, saved_μ)
+
+cb = CallbackSet(re_cb, saveμ_cb)
+
+
 ## ODE solver!
 #QUESTION: how does ODEProblem work?
 
@@ -325,11 +365,11 @@ using BenchmarkTools
 using LSODA
 using Sundials
 
-u0 = [re+1.0e+6, 1.0*pi/4, 0.0, 1000.0]					# r0, θ0, χ0
+u0 = [re+1.0e+6, pi/3, 0.0, 1000.0]					# r0, θ0, χ0
 p = []	# f0, dμdψ, dμdr, dμdθ, dμdχ, dμdf
-tspan = (0.0,5.0e+9)
+tspan = (0.0,5.0e+10)
 
-hasel_prob = ODEProblem(haselgrove!,u0,tspan,p)
+hasel_prob = ODEProblem(haselgrove!,u0,tspan,p, callback=cb)
 hasel_soln = solve(hasel_prob, CVODE_BDF(), reltol=1e-7) #reltol=1e-4
 # LSODA_BDF()?
 
@@ -355,7 +395,23 @@ plot!(re.*cos.([0:0.01:2*π;]),re.*sin.([0:0.01:2*π;]), aspect_ratio = 1)
 # plot!(re.*[0:0.01:2;],re.*[0:0.01:2;], aspect_ratio = 1)
 # plot!(re.*[0:0.01:4;],re.*[0:0.005:2;], aspect_ratio = 1)
 
+## Plot callback saved_μ
 
+t_s = saved_μ.t
+val_s = saved_μ.saveval
+val_s_r = reduce(hcat, val_s)
+val_s_r = val_s_r'
+μ_s = val_s_r[:,1]
+dμdψ_s = val_s_r[:,2]
+dip_s = val_s_r[:,3]
+ψ_s = val_s_r[:,4]
+
+plot(t_s, μ_s, title="refractive index v. time")
+plot(t_s, dμdψ_s, title="d/dpsi refractive index v. time")
+plot(t_s, dip_s.*(180/pi), title="dip angle v. time")
+plot(t_s, ψ_s.*(180/pi), title="wave normal angle v. time")
+
+## Plot magnetic field lines
 gridrange = [-pi/2.0:0.01:pi/2.0;]
 #thtgrid = np.arange(0.,np.pi,0.1)
 gridmag = pi/2.0.-gridrange
@@ -395,12 +451,15 @@ plot!(x_dip4,y_dip4,aspect_ratio=1)
 
 ## calculate and plot refractive index surface
 # initial conditions
-θ_test = pi/3
-r_test = 2.0*re*(sin(θ_test))^2
+x_test = 1*9.5701E+6
+y_test = -1*3.1213E+6
+θ_test = atan(y_test/x_test) + π/2
+r_test = sqrt(x_test^2 + y_test^2) #2.0*re*(sin(θ_test))^2 # on plotted B field line
 ψ_test = [0:0.01:2π;]
 dip_test = atan(2.0*cot(θ_test))
-χ_test = ψ_test .- 3π/2 .+ dip_test
-f_test = 5000.0
+#χ_test = ψ_test .+ 3π/2 .- dip_test
+χ_test = -1.0.*ψ_test .+ 3.0*π/2 .- dip_test
+f_test = 1000.0
 
 # calculate μ, dμdψ
 u_test = phase_refractive_index.(r_test, θ_test, χ_test, f_test)
@@ -479,6 +538,85 @@ varargs(1,2,3)
 a = [1:5;]
 sum(a)
 
+## event/callback scratch
+# see https://tutorials.sciml.ai/html/introduction/04-callbacks_and_events.html
+using DifferentialEquations, ParameterizedFunctions
+
+# define a ballistic projectile, i.e. a bouncy ball
+ball! = @ode_def BallBounce begin
+	dy = v	# d/dposition = velocity
+	dv = -g # d/dvelocity = -1*acceleration due to gravity
+end g
+
+function condition(u,t,integrator)
+	u[1]
+end
+
+# make the ball bounce!
+# integrator.u : position, velocity, acceleration
+# integrator.t : time
+# integrator.p : parameters (g,friction coeff)
+function affect!(integrator)
+	integrator.u[2] = -integrator.p[2] * integrator.u[2]
+	integrator.p[2] = sqrt(integrator.p[2]) # friction parameter changes with each bounce
+end
+
+# build the callback!
+# when condition: y == 0, affect! occurs (velocity changes sign, minus loss from friction coeff)
+bounce_cb = ContinuousCallback(condition, affect!)
+
+# now add a discrete callback: when time = 2, some kid kicks the ball, adding 50 to its velocity
+function condition_kick(u,t,integrator)
+	t == 2
+	#t - 2 # continuous callback version: when t - 2 --> 0, condition_kick is triggered
+end
+
+function affect_kick!(integrator)
+	integrator.u[2] += 50
+end
+
+# build the discrete callback!
+kick_cb = DiscreteCallback(condition_kick,affect_kick!)
+
+# build a CallbackSet in order to combine the bounce_cb and kick_cb
+cb = CallbackSet(bounce_cb,kick_cb)
+
+# make the ODEProblem with callback
+u_0 = [50.0,0.0]
+t_span = (0.0,15.0)
+p_ = [9.8,0.9]
+prob_ = ODEProblem(ball!,u_0,t_span,p_,callback=cb)
+# with bounce_cb only: prob_ = ODEProblem(ball!,u_0,t_span,p_,callback=bounce_cb)
+sol_ = solve(prob_,Tsit5(),tstops=[2.0]) #note: need to specify that intergration scheme should step at exactly t == 2 in order to trigger discrete callback
+
+plot(sol_)
+
+# integration termination and directional handling
+# example: harmonic oscillator
+harmonic! = @ode_def HarmonicOscillator begin
+	dv = -x
+	dx = v
+end
+
+#terminate the integration when a condition is met
+
+function terminate_condition(u,t,integrator)
+	u[2]
+end
+
+function terminate_affect!(integrator)
+	terminate!(integrator)
+end
+
+terminate_cb = ContinuousCallback(terminate_condition,terminate_affect!)
+terminate_upcrossing_cb = ContinuousCallback(terminate_condition,terminate_affect!,nothing) # if two affect!s are given in a Callback build, the first is for "upcrossings" (i.e. when the condition trigger crosses 0 from below), and the second is for "downcrossings" (when the condition trigger crosses 0 from above)
+
+u_0 = [1.0,0.0]
+t_span = (0.0,10.0)
+prob_ = ODEProblem(harmonic!,u_0,t_span,callback=terminate_upcrossing_cb)
+sol_ = solve(prob_) #NOTE: can also add callbacks to solve() command! this allows us to distinguish between model feature (callbacks in problem statement) and integration commands (callbacks in solve command)!
+plot(sol_)
+
 ## type/value check
 r = re + 1.0e6
 θ = pi/4.0
@@ -494,7 +632,7 @@ dip*180/pi	# dip angle: angle between horizontal and B field
 ω = 2.0*pi*freq
 
 # convert radius to fraction of Earth radius
-rE = r/re
+(r/re) = r/re
 re
 
 # find magnetic field at (r,θ) from dipole field model
@@ -503,8 +641,8 @@ Bmag = B0*((re^3)/(r^3))*sqrt(4.0-3.0*cos((pi/2.0)-θ)*cos((pi/2.0)-θ))
 B0*((re^3)/(r^3))
 sqrt(4.0-3.0*cos((pi/2.0)-θ)*cos((pi/2.0)-θ))
 # calculate electron and proton density profiles
-n_e = 1.e6*(1.8e5*exp(-4.183119*(rE-1.0471)))
-n_p = 1.e6*(1.8e5*exp(-4.183119*(rE-1.0471)))
+n_e = 1.e6*(1.8e5*exp(-4.183119*((r/re)-1.0471)))
+n_p = 1.e6*(1.8e5*exp(-4.183119*((r/re)-1.0471)))
 
 # electron plasma angular frequency squared
 ω_e2 = (n_e*(e^2))/(eps*me)
@@ -589,14 +727,43 @@ p2 = contour(r_gridmag, θ_gridmag, Z_gridmag)
 plot(p1,p2)
 
 # x,y: need to figure out how to exclude area inside Earth from grid
-x_gridmag = -5e7:1e5:5e7
-y_gridmag = x_gridmag
-f_bmag_xy(x_gridmag, y_gridmag) = begin
-	B0*(re^3/(sqrt(x_gridmag^2 + y_gridmag^2)^3))*sqrt(1+3*cos(atan(x_gridmag/y_gridmag))^2)
+r_gridmag = re:1e5:5e7
+θ_gridmag = range(0,stop=2π,length=(length(r_gridmag)))
+x_gridmag = r_gridmag.*sin.(θ_gridmag) # = -5e7:1e5:5e7
+sort!(x_gridmag)
+y_gridmag = r_gridmag.*cos.(θ_gridmag) #x_gridmag
+sort!(y_gridmag)
+f_log_bmag_xy(x_gridmag, y_gridmag) = begin
+	log10(B0*(re^3/(sqrt(x_gridmag^2 + y_gridmag^2)^3))*sqrt(1+3*cos(atan(x_gridmag/y_gridmag))^2))
 end
 X_gridmag = repeat(reshape(x_gridmag,1,:), length(y_gridmag), 1)
 Y_gridmag = repeat(y_gridmag, 1, length(x_gridmag))
-Z_gridmag_xy = map(f_bmag_xy, X_gridmag, Y_gridmag)
-p1_xy = contour(x_gridmag, y_gridmag, f_bmag_xy, fill = (true,cgrad(scale = :log)))
+Z_gridmag_xy = map(f_log_bmag_xy, X_gridmag, Y_gridmag)
+p1_xy = contour(x_gridmag, y_gridmag, f_log_bmag_xy, fill = (true))
 p2_xy = contour(x_gridmag, y_gridmag, Z_gridmag_xy)
 plot(p1,p2)
+
+# plot various particle density distributions
+r_grid = re:1e5:5e7
+θ_grid = range(0,stop=2π,length=(length(r_grid)))
+#x_grid = r_grid.*sin.(θ_grid) # = -5e7:1e5:5e7
+#sort!(x_grid)
+#y_grid = r_grid.*cos.(θ_grid) #x_gridmag
+#sort!(y_grid)
+f_particles(r_grid,θ_grid) = begin
+	(cos.(π/2 - θ_grid).^2)*(1.e6*(1.8e5*exp(-4.183119*((r_grid/re)-1.0471))))
+end
+R_grid = repeat(reshape(r_grid,1,:), length(θ_grid), 1)
+T_grid = repeat(θ_grid, 1, length(r_grid))
+Z_grid = map(f_particles, R_grid, T_grid)
+p1 = contour(r_grid, θ_grid, f_particles, fill = true)
+p2 = contour(r_grid, θ_grid, Z_grid)
+plot(p1,p2)
+
+n_equator = (cos.(0).^2).*(1.e6*(1.8e5.*exp.(-4.183119*((r_grid./re).-1.0471))))
+n_45 = (cos.(π/4).^2).*(1.e6*(1.8e5.*exp.(-4.183119*((r_grid./re).-1.0471))))
+n_pole = (cos.(π/2).^2).*(1.e6*(1.8e5.*exp.(-4.183119*((r_grid./re).-1.0471))))
+
+plot(r_grid, n_equator)
+plot!(r_grid, n_45)
+plot!(r_grid, n_pole)

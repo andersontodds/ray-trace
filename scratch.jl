@@ -90,13 +90,27 @@ u = function phase_refractive_index(r,θ,χ,freq)
 	Bmag = B0*(re^3/(r^3))*sqrt(1+3*cos(θ)*cos(θ))
 
     # calculate electron and proton density profiles
-	# 12/22: approximate plasmasphere with θ-dependent n_e, n_p
-	#n_e = 1e3*(1 + cos.(θ).^2).*(1.e6*(1.8e5.*exp.(-4.183119*((r./re).-1.0471))))
-	#n_p = 1e3*(1 + cos.(θ).^2).*(1.e6*(1.8e5.*exp.(-4.183119*((r./re).-1.0471))))
-	n_e = (1 + 1e3*cos.(θ).^2).*(1.e6*(1.8e5.*exp.(-4.183119*((r./re).-1.0471))))
-	n_p = (1 + 1e3*cos.(θ).^2).*(1.e6*(1.8e5.*exp.(-4.183119*((r./re).-1.0471))))
-	#n_e = 1.e6*(1.8e5*exp(-4.183119*((r/re)-1.0471)))
+	# isotropic ionosphere
+	ne_iono = (1.8e5*exp(-4.183119*((r/re)-1.0471))) # cm^-3
 	#n_p = 1.e6*(1.8e5*exp(-4.183119*((r/re)-1.0471)))
+
+	# Carpenter and Anderson 1992 plasmasphere
+	λ = π/2 - θ
+	Lshell = r./(re*cos(λ)^2)
+
+	if Lshell <= Lppi
+	     log_ne = (-0.3145*Lshell + 3.9043) + (0.15*(cos((2*π*(d+9))/365) - 0.5*cos((4*π*(d+9))/365)) + 0.00127*R̄ - 0.0635)*exp((2-Lshell)/1.5)
+	     ne_plasma = 10^(log_ne)
+	elseif Lppi < Lshell <= Lppo
+	     ne_plasma = ne_Lppi*10^((Lppi-Lshell)/0.1)
+	elseif Lppo < Lshell
+	     ne_plasma = (5800 + 300*t)*Lshell^(-4.5) + (1 - exp((2-Lshell)/10))
+	else
+	     ne_plasma = 0.0
+	end
+
+	n_e = (ne_iono + ne_plasma)*1e6
+	n_p = n_e
 
 	# electron plasma angular frequency squared
     ω_e2 = (n_e*(e^2))/(eps*me)
@@ -287,7 +301,7 @@ function haselgrove!(du,u,p,t)
 	μ = v[1]
 	dμdψ = v[2]
 
-	# 11/20: try dμdχ --> -1*dμdψ; these should be equal but are calcualted differently
+	# 11/20: try dμdχ --> -1*dμdψ; these should be equal but are calculated differently
     du[1] = 1/(μ^2)*(μ*cos(χ)+dμdψ*sin(χ))
     du[2] = 1/(r*μ^2)*(μ*sin(χ)-dμdψ*cos(χ))
     du[3] = 1/(r*μ^2)*(dμdθ*cos(χ)-(r*dμdr + μ)*sin(χ))
@@ -366,6 +380,12 @@ using LSODA
 using Sundials
 
 u0 = [re+1.0e+6, pi/3, 0.0, 1000.0]					# r0, θ0, χ0
+# r_pw = 7.90441264e6
+# θ_pw = 1.848517482
+# χ_pw = 0.0*π/2.0
+# f_pw = 1000.0
+# u0 = [r_pw, θ_pw, χ_pw, f_pw]					# r0, θ0, χ0
+
 p = []	# f0, dμdψ, dμdr, dμdθ, dμdχ, dμdf
 tspan = (0.0,5.0e+10)
 
@@ -453,8 +473,10 @@ plot!(x_dip4,y_dip4,aspect_ratio=1)
 # initial conditions
 x_test = 1*9.5701E+6
 y_test = -1*3.1213E+6
-θ_test = atan(y_test/x_test) + π/2
+θ_test = atan(abs(y_test/x_test)) + π/2
 r_test = sqrt(x_test^2 + y_test^2) #2.0*re*(sin(θ_test))^2 # on plotted B field line
+#θ_test = θ_pw
+#r_test = r_pw
 ψ_test = [0:0.01:2π;]
 dip_test = atan(2.0*cot(θ_test))
 #χ_test = ψ_test .+ 3π/2 .- dip_test
@@ -471,8 +493,8 @@ dμdψ_test = u_test_r[:,2]
 # xμ_test = μ_test.*sin.(ψ_test .+ π/2)
 # yμ_test = μ_test.*cos.(ψ_test .+ π/2)
 # # plot surface without rotation into B|| frame
-xμ_test = μ_test.*sin.(ψ_test)
-yμ_test = μ_test.*cos.(ψ_test)
+xμ_test = μ_test.*sin.(χ_test)
+yμ_test = μ_test.*cos.(χ_test)
 
 xdμ_test = dμdψ_test.*sin.(ψ_test)
 ydμ_test = dμdψ_test.*cos.(ψ_test)
@@ -483,7 +505,7 @@ yμ_test_fieldline = 4.0*(re*(sin(θ_test))^2)*cos(θ_test) .+ yμ_test.*1e5
 plot(xμ_test, yμ_test, aspect_ratio = 1)
 #plot(xdμ_test, ydμ_test, aspect_ratio = 1)
 
-plot!(xμ_test_fieldline, yμ_test_fieldline, aspect_ratio = 1)
+plot!(xμ_test_fieldline, yμ_test_fieldline, aspect_ratio = 1)|
 
 
 plot!([-30:1:30;].*cos(dip_test),[-30:1:30;].*sin(dip_test))
@@ -744,26 +766,33 @@ p2_xy = contour(x_gridmag, y_gridmag, Z_gridmag_xy)
 plot(p1,p2)
 
 # plot various particle density distributions
-r_grid = re:1e5:5e7
-θ_grid = range(0,stop=2π,length=(length(r_grid)))
+r_grid = re:1e5:10*re
+λ_grid = range(0,stop=2π,length=(length(r_grid)))
 #x_grid = r_grid.*sin.(θ_grid) # = -5e7:1e5:5e7
 #sort!(x_grid)
 #y_grid = r_grid.*cos.(θ_grid) #x_gridmag
 #sort!(y_grid)
-f_particles(r_grid,θ_grid) = begin
-	(cos.(π/2 - θ_grid).^2)*(1.e6*(1.8e5*exp(-4.183119*((r_grid/re)-1.0471))))
+f_particles(r_grid,λ_grid) = begin
+	#(cos.(π/2 - θ_grid).^2)*(1.e6*(1.8e5*exp(-4.183119*((r_grid/re)-1.0471))))
+
+
 end
-R_grid = repeat(reshape(r_grid,1,:), length(θ_grid), 1)
-T_grid = repeat(θ_grid, 1, length(r_grid))
-Z_grid = map(f_particles, R_grid, T_grid)
-p1 = contour(r_grid, θ_grid, f_particles, fill = true)
-p2 = contour(r_grid, θ_grid, Z_grid)
+
+f_Lshell(r_grid, λ_grid) = begin
+	r_grid./(re*cos(λ_grid)^2)
+end
+
+R_grid = repeat(reshape(r_grid,1,:), length(λ_grid), 1)
+T_grid = repeat(λ_grid, 1, length(r_grid))
+Z_grid = map(f_Lshell, R_grid, T_grid)
+p1 = contour(r_grid, λ_grid, f_Lshell, fill = true)
+p2 = contour(r_grid, λ_grid, Z_grid)
 plot(p1,p2)
 
-n_equator = (cos.(0).^2).*(1.e6*(1.8e5.*exp.(-4.183119*((r_grid./re).-1.0471))))
-n_45 = (cos.(π/4).^2).*(1.e6*(1.8e5.*exp.(-4.183119*((r_grid./re).-1.0471))))
-n_pole = (cos.(π/2).^2).*(1.e6*(1.8e5.*exp.(-4.183119*((r_grid./re).-1.0471))))
+#n_equator = (cos.(0).^2).*(1.e6*(1.8e5.*exp.(-4.183119*((r_grid./re).-1.0471))))
+#n_45 = (cos.(π/4).^2).*(1.e6*(1.8e5.*exp.(-4.183119*((r_grid./re).-1.0471))))
+#n_pole = (cos.(π/2).^2).*(1.e6*(1.8e5.*exp.(-4.183119*((r_grid./re).-1.0471))))
 
-plot(r_grid, n_equator)
-plot!(r_grid, n_45)
-plot!(r_grid, n_pole)
+#plot(r_grid, n_equator)
+#plot!(r_grid, n_45)
+#plot!(r_grid, n_pole)

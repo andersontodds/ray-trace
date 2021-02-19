@@ -329,7 +329,11 @@ saveμ_cb = SavingCallback(save_func, saved_μ)
 cb = CallbackSet(re_cb, saveμ_cb)
 
 ## Plot results
+<<<<<<< HEAD
 u0 = [re+1.0e+6, 1.0*pi/4, 0.0, 10000.0]					# r0, λ0, χ0, f0
+=======
+u0 = [re+1.0e+6, 1.0*pi/4, 0.0, 8000.0]					# r0, λ0, χ0, f0
+>>>>>>> 4194e4dbaf709a99dc2885215c8708c68733825d
 p = []	# f0, dμdψ, dμdr, dμdθ, dμdχ, dμdf
 tspan = (0.0,5.0e+9)
 
@@ -350,8 +354,13 @@ f = hasel_soln[4,:]
 x = r.*cos.(λ)
 y = r.*sin.(λ)
 
+<<<<<<< HEAD
 plot(re.*cos.([0:0.01:2*π;]),re.*sin.([0:0.01:2*π;]), aspect_ratio = 1, label="Earth")
 plot!(x,y, aspect_ratio=1, xlim = [-2e+7,2e+7], ylim = [-2e+7,2e+7], label=string(u0[end],"Hz"))
+=======
+plot(re.*cos.([0:0.01:2*π;]),re.*sin.([0:0.01:2*π;]), aspect_ratio = 1, legend=:none)
+plot(x,y, aspect_ratio=1, xlabel=33)
+>>>>>>> 4194e4dbaf709a99dc2885215c8708c68733825d
 
 ## saved values
 t_s = saved_μ.tx

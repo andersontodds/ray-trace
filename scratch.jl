@@ -471,9 +471,9 @@ plot!(x_dip4,y_dip4,aspect_ratio=1)
 
 ## calculate and plot refractive index surface
 # initial conditions
-x_test = 1*9.5701E+6
-y_test = -1*3.1213E+6
-θ_test = atan(abs(y_test/x_test)) + π/2
+x_test = 1*9.031E+6
+y_test = 1*1.537E+6
+θ_test = atan(abs(y_test/x_test))
 r_test = sqrt(x_test^2 + y_test^2) #2.0*re*(sin(θ_test))^2 # on plotted B field line
 #θ_test = θ_pw
 #r_test = r_pw

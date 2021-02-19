@@ -266,7 +266,7 @@ function haselgrove!(du,u,p,t)
 	μ = v[1]
 	dμdψ = v[2]
 
-	# 11/20: try dμdχ --> -1*dμdψ; these should be equal but are calcualted differently
+	# 11/20: try dμdχ --> -1*dμdψ; these should be equal but are calculated differently
     du[1] = 1/(μ^2)*(μ*cos(χ)+dμdψ*sin(χ))
     du[2] = 1/(r*μ^2)*(μ*sin(χ)-dμdψ*cos(χ))
     du[3] = 1/(r*μ^2)*(dμdλ*cos(χ)-(r*dμdr + μ)*sin(χ))
@@ -329,7 +329,7 @@ saveμ_cb = SavingCallback(save_func, saved_μ)
 cb = CallbackSet(re_cb, saveμ_cb)
 
 ## Plot results
-u0 = [re+1.0e+6, 1.0*pi/4, 0.0, 5000.0]					# r0, λ0, χ0, f0
+u0 = [re+1.0e+6, 1.0*pi/4, 0.0, 10000.0]					# r0, λ0, χ0, f0
 p = []	# f0, dμdψ, dμdr, dμdθ, dμdχ, dμdf
 tspan = (0.0,5.0e+9)
 
@@ -350,11 +350,11 @@ f = hasel_soln[4,:]
 x = r.*cos.(λ)
 y = r.*sin.(λ)
 
-plot(re.*cos.([0:0.01:2*π;]),re.*sin.([0:0.01:2*π;]), aspect_ratio = 1, legend=:none)
-plot!(x,y, aspect_ratio=1)
+plot(re.*cos.([0:0.01:2*π;]),re.*sin.([0:0.01:2*π;]), aspect_ratio = 1, label="Earth")
+plot!(x,y, aspect_ratio=1, xlim = [-2e+7,2e+7], ylim = [-2e+7,2e+7], label=string(u0[end],"Hz"))
 
 ## saved values
-t_s = saved_μ.t
+t_s = saved_μ.tx
 val_s = saved_μ.saveval
 val_s_r = reduce(hcat, val_s)
 val_s_r = val_s_r'

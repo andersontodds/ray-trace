@@ -320,25 +320,22 @@ function save_func(u,t,integrator)
 	v = phase_refractive_index(r, λ, χ, f)
 	dip = atan(2.0*tan(λ))
 	ψ = π/2.0 + dip + χ
-	vcat(v,dip,ψ)
+	vcat(v,dip,ψ)#,r,λ)
 end
 
 saved_μ = SavedValues(Float64, Array{Float64,1})
 saveμ_cb = SavingCallback(save_func, saved_μ)
 
 cb = CallbackSet(re_cb, saveμ_cb)
+#cb = CallbackSet(saveμ_cb)
 
 ## Plot results
-<<<<<<< HEAD
-u0 = [re+1.0e+6, 1.0*pi/4, 0.0, 10000.0]					# r0, λ0, χ0, f0
-=======
-u0 = [re+1.0e+6, 1.0*pi/4, 0.0, 8000.0]					# r0, λ0, χ0, f0
->>>>>>> 4194e4dbaf709a99dc2885215c8708c68733825d
+u0 = [re+1.0e+6, 1.0*pi/4, 0.0*pi/4,  1000.0]					# r0, λ0, χ0, f0
 p = []	# f0, dμdψ, dμdr, dμdθ, dμdχ, dμdf
 tspan = (0.0,5.0e+9)
 
 hasel_prob = ODEProblem(haselgrove!,u0,tspan,p)
-hasel_soln = solve(hasel_prob, CVODE_BDF(), reltol=1e-7, callback=cb)
+hasel_soln = solve(hasel_prob, CVODE_BDF(), reltol=1e-7, callback=cb, dtmax = 1e6, dtmin = 1e-8)
 
 using Plots
 plotly()
@@ -354,28 +351,31 @@ f = hasel_soln[4,:]
 x = r.*cos.(λ)
 y = r.*sin.(λ)
 
-<<<<<<< HEAD
 plot(re.*cos.([0:0.01:2*π;]),re.*sin.([0:0.01:2*π;]), aspect_ratio = 1, label="Earth")
 plot!(x,y, aspect_ratio=1, xlim = [-2e+7,2e+7], ylim = [-2e+7,2e+7], label=string(u0[end],"Hz"))
-=======
-plot(re.*cos.([0:0.01:2*π;]),re.*sin.([0:0.01:2*π;]), aspect_ratio = 1, legend=:none)
-plot(x,y, aspect_ratio=1, xlabel=33)
->>>>>>> 4194e4dbaf709a99dc2885215c8708c68733825d
 
 ## saved values
-t_s = saved_μ.tx
+t_s = saved_μ.t
 val_s = saved_μ.saveval
 val_s_r = reduce(hcat, val_s)
 val_s_r = val_s_r'
+#r_s = val_s_r[:,5]
+#λ_s = val_s_r[:,6]
 μ_s = val_s_r[:,1]
 dμdψ_s = val_s_r[:,2]
 dip_s = val_s_r[:,3]
 ψ_s = val_s_r[:,4]
 
+dt_s = zeros(length(t_s))
+for i = 1:length(t_s)-1
+	dt_s[i] = t_s[i+1]-t_s[i]
+end
+
 plot(t_s, μ_s, title="refractive index v. time")
 plot(t_s, dμdψ_s, title="d/dpsi refractive index v. time")
 plot(t_s, dip_s.*(180/pi), title="dip angle v. time")
 plot(t_s, ψ_s.*(180/pi), title="wave normal angle v. time")
+plot(1:1:length(dt_s), dt_s, title="time step size v. step number")
 
 ## refractive index surface
 # initial conditions

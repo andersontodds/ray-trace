@@ -70,12 +70,12 @@ Lppo = function initialize_plasmasphere(Kp_max, Lppi, d, R̄, mlt)
 	λ_range = 0
 	L = r_range./(re*cos(λ_range)^2) # range of L-values where Lppo will be searched for
 
-	Kp_max = 3                             # for example
-	Lppi = 5.6 - 0.46*Kp_max                # plasmapause inner limit in L
-	#Lppo = 5.75                             # placeholder
-	d = 0                                   # day number
-	R̄ = 90                                  # 13-month average sunspot number
-	mlt = 2                                   # magnetic local time
+	Kp_max = 3              		# for example
+	Lppi = 5.6 - 0.46*Kp_max        # plasmapause inner limit in L
+	#Lppo = 5.75                    # placeholder
+	d = 0                           # day number
+	R̄ = 90							 # 13-month average sunspot number
+	mlt = 2                         # magnetic local time
 
 	ne_Lppi = 10^((-0.3145*Lppi + 3.9043) + (0.15*(cos((2*π*(d+9))/365) - 0.5*cos((4*π*(d+9))/365)) + 0.00127*R̄ - 0.0635)*exp((2-Lppi)/1.5))
 
@@ -93,8 +93,8 @@ u = function refractive_index(r,θ,ϕ,ρ_r,ρ_θ,ρ_ϕ,freq)
     # 1. set up medium
     # 1a. magnetic field
 
-	B = magnetic_field(r,θ,ϕ)
-	Br, Bθ, Bϕ = B
+	Bvec = magnetic_field(r,θ,ϕ)
+	Br, Bθ, Bϕ = Bvec
 	Bmag = sqrt(Br^2 + Bθ^2 + Bϕ^2)
 
     # 1b. plasma
@@ -136,7 +136,7 @@ u = function refractive_index(r,θ,ϕ,ρ_r,ρ_θ,ρ_ϕ,freq)
 
 	μvec = [ρ_r, ρ_θ, ρ_ϕ]
 	μmag = sqrt(ρ_r^2 + ρ_θ^2 + ρ_ϕ^2)
-	cos_ψ = (B ⋅ μvec)/(Bmag*μmag)
+	cos_ψ = (Bvec ⋅ μvec)/(Bmag*μmag)
 	ψ = acos(cos_ψ)
 
 	# define R, L, P, D, S,
@@ -213,7 +213,7 @@ u = function refractive_index(r,θ,ϕ,ρ_r,ρ_θ,ρ_ϕ,freq)
 	#println("dμdψ = ", dμdψ)
 
 	# non-mutating output
-	u = [μ,dμdψ,ψ,B]
+	u = [μ,dμdψ,ψ,Bvec]
 
 end
 
@@ -264,13 +264,13 @@ dμdρr = function ddρr(r,θ,ϕ,ρ_r,ρ_θ,ρ_ϕ,freq)
 	# dμ/dρ_k = (dμ/dψ)(dψ/dρ_k) = (dμ/dψ)((ρ_k*cosψ - μcos(α_Bk)/(μ²sinψ))
 	# where k = r, λ, ϕ; and α_Bk = angle between the magnetic field vector and k
 
-	μ, dμdψ, ψ, B = refractive_index(r,θ,ϕ,ρ_r,ρ_θ,ρ_ϕ,freq) #DEBUG: BoundsError at this location 04/21/2021
+	μ, dμdψ, ψ, Bvec = refractive_index(r,θ,ϕ,ρ_r,ρ_θ,ρ_ϕ,freq) #DEBUG: BoundsError at this location 04/21/2021
 
 	ρrvec = [ρ_r, 0.0, 0.0]
-	Bmag = sqrt(B[1]^2 + B[2]^2 + B[3]^2)
+	Bmag = sqrt(Bvec[1]^2 + Bvec[2]^2 + Bvec[3]^2)
 	ρrmag = abs(ρ_r)
 
-	cos_αr = (B ⋅ ρrvec)/(Bmag*ρrmag)
+	cos_αr = (Bvec ⋅ ρrvec)/(Bmag*ρrmag)
 
 	dμdρr = dμdψ*((ρ_r*cos(ψ) - μ*cos_αr)/(μ^2 * sin(ψ)))
 end
@@ -281,13 +281,13 @@ dμdρθ = function ddρλ(r,θ,ϕ,ρ_r,ρ_θ,ρ_ϕ,freq)
 	# Kimura 1966:
 	# dμ/dρ_k = (dμ/dψ)(dψ/dρ_k) = (dμ/dψ)((ρ_k*cosψ - μcos(α_Bk)/(μ²sinψ))
 	# where k = r, λ, ϕ; and α_Bk = angle between the magnetic field vector and k
-	μ, dμdψ, ψ, B = refractive_index(r,θ,ϕ,ρ_r,ρ_θ,ρ_ϕ,freq) # unpack
+	μ, dμdψ, ψ, Bvec = refractive_index(r,θ,ϕ,ρ_r,ρ_θ,ρ_ϕ,freq) # unpack
 
 	ρθvec = [0.0, ρ_θ, 0.0]
-	Bmag = sqrt(B[1]^2 + B[2]^2 + B[3]^2)
+	Bmag = sqrt(Bvec[1]^2 + Bvec[2]^2 + Bvec[3]^2)
 	ρθmag = abs(ρ_θ)
 
-	cos_αθ = (B ⋅ ρθvec)/(Bmag*ρθmag)
+	cos_αθ = (Bvec ⋅ ρθvec)/(Bmag*ρθmag)
 
 	dμdρθ = dμdψ*((ρ_θ*cos(ψ) - μ*cos_αθ)/(μ^2 * sin(ψ)))
 end
@@ -298,13 +298,13 @@ dμdρϕ = function ddρϕ(r,θ,ϕ,ρ_r,ρ_θ,ρ_ϕ,freq) #TODO λ → θ
 	# Kimura 1966:
 	# dμ/dρ_k = (dμ/dψ)(dψ/dρ_k) = (dμ/dψ)((ρ_k*cosψ - μcos(α_Bk)/(μ²sinψ))
 	# where k = r, λ, ϕ; and α_Bk = angle between the magnetic field vector and k
-	μ, dμdψ, ψ, B = refractive_index(r,θ,ϕ,ρ_r,ρ_θ,ρ_ϕ,freq) # unpack
+	μ, dμdψ, ψ, Bvec = refractive_index(r,θ,ϕ,ρ_r,ρ_θ,ρ_ϕ,freq) # unpack
 
 	ρϕvec = [0.0, 0.0, ρ_ϕ]
-	Bmag = sqrt(B[1]^2 + B[2]^2 + B[3]^2)
+	Bmag = sqrt(Bvec[1]^2 + Bvec[2]^2 + Bvec[3]^2)
 	ρϕmag = abs(ρ_ϕ)
 
-	cos_αϕ = (B ⋅ ρϕvec)/(Bmag*ρrmag)
+	cos_αϕ = (Bvec ⋅ ρϕvec)/(Bmag*ρϕmag)
 
 	dμdρϕ = dμdψ*((ρ_ϕ*cos(ψ) - μ*cos_αϕ)/(μ^2 * sin(ψ)))
 end
@@ -344,13 +344,14 @@ function haselgrove!(du,u,p,t)
 	μ = v[1]
 	dμdψ = v[2]
 
-	#TODO finish changing these to Kimura 1966 eqns (Bortnik thesis 2.3, group time 2.4)
+	# TODO: ensure ρ_k have appropriate initial conditions!
+
     du[1] = 1/(μ^2)*(ρ_r-μ*dμdρr) 							# r: radial distance (m)
     du[2] = 1/(r*μ^2)*(ρ_θ-μ*dμdρθ)							# θ: colatitude (radians)
-    du[3] = 1/(r*μ^2*sin(π/2 - θ))*(ρ_ϕ-μ*dμdρϕ)			# ϕ: longitude (radians)
-	du[4] = (1/μ)*dμdr + ρ_θ*du[2] + ρ_ϕ*du[3]*sin(π/2 - θ)		# ρ_r: r-component of μ
-	du[5] = (1/r)*((1/μ)*dμdθ - ρ_θ*du[1] + r*ρ_ϕ*du[3]*cos(π/2 - θ)) # ρ_θ: θ-component of μ
-	du[6] = (1/(r*sin(π/2 - θ)))*((1/μ)*dμdϕ - ρ_ϕ*du[1]*sin(π/2 - θ) - r*ρ_ϕ*du[2]*cos(π/2 - θ)) # ρ_ϕ: ϕ-component of μ
+    du[3] = 1/(r*μ^2*sin(θ))*(ρ_ϕ-μ*dμdρϕ)					# ϕ: longitude (radians)
+	du[4] = (1/μ)*dμdr + ρ_θ*du[2] + ρ_ϕ*du[3]*sin(θ)		# ρ_r: r-component of μ
+	du[5] = (1/r)*((1/μ)*dμdθ - ρ_θ*du[1] + r*ρ_ϕ*du[3]*cos(θ)) # ρ_θ: θ-component of μ
+	du[6] = (1/(r*sin(θ)))*((1/μ)*dμdϕ - ρ_ϕ*du[1]*sin(θ) - r*ρ_ϕ*du[2]*cos(θ)) # ρ_ϕ: ϕ-component of μ
 	du[7] = (1/c)*(1 + (freq/μ)*dμdf) # T: group delay time (s)
 
 
@@ -390,7 +391,7 @@ p = [1000.0]										# f0
 tspan = (0.0,5.0e+9)
 
 hasel_prob = ODEProblem(haselgrove!,u0,tspan,p)
-hasel_soln = solve(hasel_prob, CVODE_BDF(), reltol=1e-7, callback=cb, dtmax = 1e6, dtmin = 1e-8)
+hasel_soln = solve(hasel_prob,  callback=cb)#, reltol=1e-7, dtmax = 1e6, dtmin = 1e-8)
 
 
 ## scratch
@@ -451,8 +452,8 @@ plot!(L, ne_total, yaxis=:log, label="aggregate n_e")
 r = re*2
 θ = π/4
 ϕ = 0.0
-B = magnetic_field(r,θ,ϕ)
-Br, Bθ, Bϕ = B
+Bvec = magnetic_field(r,θ,ϕ)
+Br, Bθ, Bϕ = Bvec
 Bmag = sqrt(Br^2 + Bθ^2 + Bϕ^2)
 
 # 1b. plasma
@@ -573,4 +574,10 @@ dμdψ = 1/(2.0*μ)*((dBdψ + dFdψ)/(2*A) - 2*dAdψ*(B + F)/(2*A^2))
 #println("dμdψ = ", dμdψ)
 
 # non-mutating output
-u = [μ,dμdψ,ψ,B]
+u = [μ,dμdψ,ψ,Bvec]
+
+# try unpacking u
+
+μ1, dμdψ1, ψ1, B1 = u
+
+B1[1]

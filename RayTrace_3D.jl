@@ -31,7 +31,8 @@ using LinearAlgebra
 using BenchmarkTools
 using LSODA
 using Sundials
-using Plots
+using CairoMakie
+#using Plots #--> replace Plots with Makie
 
 # physical constants
 c = 2.99792458e8	# speed of light in m/s
@@ -403,7 +404,7 @@ L = r./(re*cos(λ)^2)
 
 Kp_max = 3                             # for example
 Lppi = 5.6 - 0.46*Kp_max                # plasmapause inner limit in L
-Lppo = 5.75                             # placeholder
+#Lppo = 5.75                             # placeholder
 d = 0                                   # day number
 R̄ = 90                                  # 13-month average sunspot number
 t = 2                                   # magnetic local time
@@ -421,6 +422,15 @@ plot(L, ne_plasma_1, yaxis=:log, label="plasmasphere")
 plot!(L, ne_plasma_2, yaxis=:log, label="plasmapause inner limit")
 plot!(L, ne_plasma_3, yaxis=:log, label="plasmasphere outer limit")
 plot!(L,ne_iono, yaxis=:log, label="ionosphere")
+
+f = Figure()
+ax = Axis(f[1,1], xlabel = "x", ylabel = "f(x)", yscale = log10)
+ylims!(10^-1, 10^4)
+lines!(L, ne_plasma_1, label="plasmasphere")
+lines!(L, ne_plasma_2, label="plasmapause inner limit")
+lines!(L, ne_plasma_3, label="plasmapause outer limit")
+f
+
 
 min_index = findmin(abs.(ne_plasma_2 - ne_plasma_3))[2]
 Lppo = L[min_index]
@@ -442,10 +452,81 @@ end
 
 ne_total = ne_iono + ne_plasma
 
-using Plots
-plot(L, ne_iono, yaxis=:log, ylims=[1,10^6], label="ionosphere")
-plot!(L, ne_plasma, yaxis=:log, label="plasmasphere")
-plot!(L, ne_total, yaxis=:log, label="aggregate n_e")
+#using Plots
+#plot(L, ne_iono, yaxis=:log, ylims=[1,10^6], label="ionosphere")
+#plot!(L, ne_plasma, yaxis=:log, label="plasmasphere")
+#plot!(L, ne_total, yaxis=:log, label="aggregate n_e")
+
+f2 = Figure()
+ax = Axis(f2[1,1], xlabel = "L(Rₑ)", ylabel = "n (m⁻³)", yscale = log10)
+ylims!(10^-1, 10^5)
+lines!(L, ne_iono)
+lines!(L, ne_plasma)
+lines!(L, ne_total)
+f2
+
+# plot magnetic field lines, strength
+#using CairoMakie
+
+let
+    x = -1:0.02:1
+    y = -1.5:0.02:2
+    egg(x,y) = x^2 + y^2/(1.4 + y/5)^2
+    segg = [egg(x,y) for x in x, y in y]
+    fig = Figure(resolution = (470, 550))
+    ax = Axis(fig, xlabel = "x", ylabel = "y", backgroundcolor = :black,
+    xgridstyle=:dash, ygridstyle=:dash, xgridcolor = :grey, ygridcolor = :grey)
+    cl =contour!(x, y, segg, linewidth = 0.85,colormap = :viridis,
+                levels = 0:0.02:0.5)
+    cbar = Colorbar(fig, cl, label ="egg-l", labelpadding = 0, width = 15,
+                ticksize=15, tickalign = 1, height = Relative(1))
+    fig[1, 1] = ax
+    fig[1, 2] = cbar
+    colgap!(fig.layout, 7)
+    fig
+end
+
+let 
+	x = -2:0.01:2
+	y = -2:0.01:2
+	gridrange = -pi:0.01:0
+	r_xy(x,y) = (x^2 + y^2)^(1/2);
+	θ_xy(x,y) = atan(y/x);
+	
+	L_xy(x,y) = r_xy(x,y)/cos(θ_xy(x,y))^2
+	sL = [L_xy(x,y) for x in x, y in y]
+
+	Bmagnitude(x,y) = B0*(1/r_xy(x,y))^3*(1 + 3*cos(θ_xy(x,y))*cos(θ_xy(x,y)))
+	log_Bmag(x,y) = log10(Bmagnitude(x,y))
+	sB = [Bmagnitude(x,y) for x in x, y in y]
+	slB = [log_Bmag(x,y) for x in x, y in y]
+
+	fig = Figure()
+	ax = Axis(fig, xlabel = "Lₓ", ylabel = "Ly", backgroundcolor = :black, 
+		xgridstyle = :dash, ygridstyle = :dash, xgridcolor = :grey, ygridcolor = :grey,
+		aspect = DataAspect())
+	#c1 = contour!(x, y, sB, linewidth = 0.85, colormap = :viridis, levels = 10^-6:5*10^-7:2*10^-4)
+	#cbar1 = Colorbar(fig, c1, label = "|B| (T)", labelpadding = 0, width = 15, 
+	#	ticksize = 15, tickalign = 1, height = Relative(1))
+	
+	c1 = heatmap!(x, y, sB, colormap = :viridis, colorrange = (10^-6,10^-4))
+	cbar1 = Colorbar(fig, c1, label = "|B| (T)", labelpadding = 0, width = 15, 
+		ticksize = 15, tickalign = 1, height = Relative(1), scale = log10)
+		
+
+	c2 = contour!(x, y, sL, linewidth = 0.85, color = :red, levels = 1:0.5:6)
+	#cbar2 = Colorbar(fig, c1, label = "B magnitude", labelpadding = 0, width = 15, 
+	#	ticksize = 15, tickalign = 1, height = Relative(1))
+	
+	
+	poly!(Circle(Point2f(0,0), 1f0), color = :black)
+	fig[1,1] = ax
+	fig[1,2] = cbar1
+	colgap!(fig.layout, 7)
+	fig
+end
+
+# next: plot B field lines, heatmap plasma density
 
 
 ##

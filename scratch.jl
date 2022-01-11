@@ -798,3 +798,23 @@ plot(p1,p2)
 #plot(r_grid, n_equator)
 #plot!(r_grid, n_45)
 #plot!(r_grid, n_pole)
+
+
+## CairoMakie practice
+using CairoMakie
+
+f = Figure()
+
+ax = Axis(f[1,1], xlabel = "x label", ylabel = "y label", title = "Title")
+
+f
+
+lineobject = lines!(ax, 0..10, sin, color = :red)
+scatobject = scatter!(0:0.5:10, cos, color = :orange)
+
+f
+
+ylims!(ax, nothing, 10)
+f
+autolimits!(ax)
+F

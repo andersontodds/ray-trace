@@ -450,7 +450,22 @@ for i = 1:length(L)
     end
 end
 
-ne_total = ne_iono + ne_plasma
+ne_plas = function plasmasphere(L,Lppi,Lppo)
+	if L <= Lppi
+		log_ne = (-0.3145*L + 3.9043) + (0.15*(cos((2*π*(d+9))/365) - 0.5*cos((4*π*(d+9))/365)) + 0.00127*R̄ - 0.0635)*exp((2-L)/1.5)
+        ne_plasma = 10^(log_ne)
+	elseif Lppi < L <= Lppo
+        ne_plasma = ne_Lppi*10^((Lppi-L)/0.1)
+    elseif Lppo < L
+        ne_plasma = (5800 + 300*t)*L^(-4.5) + (1 - exp((2-L)/10))
+    else
+        ne_plasma = 0.0
+    end
+end
+
+ne_ion(r) = (1.8e5.*exp.(-4.183119.*((r).-1.0471))) # cm^-3; where r is in units of Re
+
+ne_tot(x,y) = ne_ion(r_xy) + ne_plas(L_xy)
 
 #using Plots
 #plot(L, ne_iono, yaxis=:log, ylims=[1,10^6], label="ionosphere")
@@ -527,6 +542,44 @@ let
 end
 
 # next: plot B field lines, heatmap plasma density
+let 
+	x = -4:0.01:4
+	y = -4:0.01:4
+	r_xy(x,y) = (x^2 + y^2)^(1/2);
+	θ_xy(x,y) = atan(y/x);
+	
+	# B-field lines: aka contours of constant L
+	L_xy(x,y) = r_xy(x,y)/cos(θ_xy(x,y))^2
+	sL = [L_xy(x,y) for x in x, y in y]
+
+	# plasma density: ne_total is a combination of ne_iono(r) and ne_plasma(L).  
+	# Additionally, ne_plasma is piecewise based on plasmasphere location (Lppi, Lppo).
+	ne_tot(x,y) = ne_ion(r_xy(x,y)) + ne_plas(L_xy(x,y),Lppi, Lppo)
+	#ne_tot(x,y) = ne_plas(L_xy(x,y),Lppi, Lppo)
+	sn = [ne_tot(x,y) for x in x, y in y]
+
+	fig = Figure()
+	ax = Axis(fig, xlabel = "Lₓ", ylabel = "Ly", backgroundcolor = :black, 
+		xgridstyle = :dash, ygridstyle = :dash, xgridcolor = :grey, ygridcolor = :grey,
+		aspect = DataAspect())
+	
+	cmap = cgrad(:magma, scale = :log10)
+	c1 = heatmap!(x, y, sn, colormap = cmap, colorrange = (10^2,10^3))
+	cbar1 = Colorbar(fig, c1, label = "n (cm⁻³)", labelpadding = 0, width = 15, 
+		ticksize = 15, tickalign = 1, height = Relative(1), scale = log10)
+		
+
+	c2 = contour!(x, y, sL, linewidth = 0.85, color = :red, levels = 1:0.5:6)
+	#cbar2 = Colorbar(fig, c1, label = "B magnitude", labelpadding = 0, width = 15, 
+	#	ticksize = 15, tickalign = 1, height = Relative(1))
+	
+	
+	poly!(Circle(Point2f(0,0), 1f0), color = :black)
+	fig[1,1] = ax
+	fig[1,2] = cbar1
+	colgap!(fig.layout, 7)
+	fig
+end
 
 
 ##

@@ -1,4 +1,4 @@
-## BortnikRayTrace.jl
+## RayTrace_3D.jl
 # Todd Anderson
 # 5 October 2020
 #
@@ -533,7 +533,7 @@ let
 	#cbar2 = Colorbar(fig, c1, label = "B magnitude", labelpadding = 0, width = 15, 
 	#	ticksize = 15, tickalign = 1, height = Relative(1))
 	
-	
+	#poly!(Circle(Point2f(0,0), 1.15f0), color = :green)
 	poly!(Circle(Point2f(0,0), 1f0), color = :black)
 	fig[1,1] = ax
 	fig[1,2] = cbar1
@@ -558,18 +558,22 @@ let
 	#ne_tot(x,y) = ne_plas(L_xy(x,y),Lppi, Lppo)
 	sn = [ne_tot(x,y) for x in x, y in y]
 
+	log_ne_tot(x,y) = log10(ne_tot(x,y))
+	sln = [log_ne_tot(x,y) for x in x, y in y]
+
 	fig = Figure()
 	ax = Axis(fig, xlabel = "Lₓ", ylabel = "Ly", backgroundcolor = :black, 
 		xgridstyle = :dash, ygridstyle = :dash, xgridcolor = :grey, ygridcolor = :grey,
 		aspect = DataAspect())
 	
-	cmap = cgrad(:magma, scale = :log10)
-	c1 = heatmap!(x, y, sn, colormap = cmap, colorrange = (10^2,10^3))
-	cbar1 = Colorbar(fig, c1, label = "n (cm⁻³)", labelpadding = 0, width = 15, 
-		ticksize = 15, tickalign = 1, height = Relative(1), scale = log10)
+	#cmap = cgrad(:magma, scale = :log10)
+	#c1 = heatmap!(x, y, sn, colormap = cmap, colorrange = (10^2,10^3))
+	c1 = heatmap!(x, y, sln, colormap = :magma, colorrange = (0,5))
+	cbar1 = Colorbar(fig, c1, label = "log₁₀n (cm⁻³)", labelpadding = 0, width = 15, 
+		ticksize = 15, tickalign = 1, height = Relative(1))
 		
 
-	c2 = contour!(x, y, sL, linewidth = 0.85, color = :red, levels = 1:0.5:6)
+	c2 = contour!(x, y, sL, linewidth = 0.85, colormap = :bilbao, levels = 1:0.5:6)
 	#cbar2 = Colorbar(fig, c1, label = "B magnitude", labelpadding = 0, width = 15, 
 	#	ticksize = 15, tickalign = 1, height = Relative(1))
 	

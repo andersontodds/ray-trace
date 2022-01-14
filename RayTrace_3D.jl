@@ -463,7 +463,7 @@ ne_plas = function plasmasphere(L,Lppi,Lppo)
     end
 end
 
-ne_ion(r) = (1.8e5.*exp.(-4.183119.*((r).-1.0471))) # cm^-3; where r is in units of Re
+ne_ion(r) = (1.8e5*exp(-4.183119*((r)-1.0471))) # cm^-3; where r is in units of Re
 
 ne_tot(x,y) = ne_ion(r_xy) + ne_plas(L_xy)
 

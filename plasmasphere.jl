@@ -150,22 +150,22 @@ let
 end
 
 let 
-	x = -4:0.01:4
-	y = -4:0.01:4
+	x = -4*re:0.01*re:4*re
+	y = -4*re:0.01*re:4*re
 	r_xy(x,y) = (x^2 + y^2)^(1/2);
 	θ_xy(x,y) = atan(y/x);
 	
 	# B-field lines: aka contours of constant L
-	L_xy(x,y) = r_xy(x,y)/cos(θ_xy(x,y))^2
+	L_xy(x,y) = (r_xy(x,y)/re)/cos(θ_xy(x,y))^2
 	sL = [L_xy(x,y) for x in x, y in y]
 
 	# plasma density: ne_total is a combination of ne_iono(r) and ne_plasma(L).  
 	# Additionally, ne_plasma is piecewise based on plasmasphere location (Lppi, Lppo).
-	ne_tot(x,y) = ne_ion(r_xy(x,y)) + ne_plas(L_xy(x,y),Lppi, Lppo)
-	#ne_tot(x,y) = ne_plas(L_xy(x,y),Lppi, Lppo)
-	sn = [ne_tot(x,y) for x in x, y in y]
+	#ne_tot(x,y) = ne_ion(r_xy(x,y)) + ne_plas(L_xy(x,y),Lppi, Lppo)
+	ne_total(x,y) = plasmasphere_eq(L_xy(x,y),Lppi,Lppo,d,R̄,mlt) + ionosphere_eq(r_xy(x,y))
+	sn = [ne_total(x,y) for x in x, y in y]
 
-	log_ne_tot(x,y) = log10(ne_tot(x,y))
+	log_ne_tot(x,y) = log10(ne_total(x,y))
 	sln = [log_ne_tot(x,y) for x in x, y in y]
 
 	fig = Figure()
@@ -175,12 +175,12 @@ let
 	
 	#cmap = cgrad(:magma, scale = :log10)
 	#c1 = heatmap!(x, y, sn, colormap = cmap, colorrange = (10^2,10^3))
-	c1 = heatmap!(x, y, sln, colormap = :magma, colorrange = (0,5))
+	c1 = heatmap!(x./re, y./re, sln, colormap = :magma, colorrange = (0,5))
 	cbar1 = Colorbar(fig, c1, label = "log₁₀n (cm⁻³)", labelpadding = 0, width = 15, 
 		ticksize = 15, tickalign = 1, height = Relative(1))
 		
 
-	c2 = contour!(x, y, sL, linewidth = 0.85, colormap = :bilbao, levels = 1:0.5:6)
+	c2 = contour!(x./re, y./re, sL, linewidth = 0.85, colormap = :bilbao, levels = 1:0.5:6)
 	#cbar2 = Colorbar(fig, c1, label = "B magnitude", labelpadding = 0, width = 15, 
 	#	ticksize = 15, tickalign = 1, height = Relative(1))
 	

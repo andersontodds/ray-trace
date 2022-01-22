@@ -26,6 +26,9 @@
 #       - work on ionosphere profile fit, see note in ionosphere_eq()
 #   3. separate test lines into file that calls plasmasphere
 
+# imports
+using CairoMakie
+
 # physical constants
 c = 2.99792458e8	# speed of light in m/s
 re = 6.3712e6      	# radius of Earth in meters
@@ -92,12 +95,14 @@ end
 
 ne_plasma_de = function diffusive_equilibrium(r, ne_eq)
     
+    i = 1
+    T = 2500 # Kelvin; from fig 1 in Balan et al 1996 (https://doi.org/10.1029/96JA01798)
     rb = 7370000 # geocentric distance to base of diffusive equilibrium model, in m
     G = rb*(1-rb/r)
     S = 1.506*T*(rb/7370)^2*(1/4^(i-1)) # parameter i specifies ion species
     αᵢ = 1 # relative concentration of each 
 
-    ne_plasma_de = ne_eq*(αᵢ*exp(-G/S)) # for single ion species
+    ne_plasma_de = ne_eq*(αᵢ*exp(-G/S))^(1/2) # for single ion species
 end
 
 ne_iono = function ionosphere_eq(r)
@@ -162,7 +167,8 @@ let
 	# plasma density: ne_total is a combination of ne_iono(r) and ne_plasma(L).  
 	# Additionally, ne_plasma is piecewise based on plasmasphere location (Lppi, Lppo).
 	#ne_tot(x,y) = ne_ion(r_xy(x,y)) + ne_plas(L_xy(x,y),Lppi, Lppo)
-	ne_total(x,y) = plasmasphere_eq(L_xy(x,y),Lppi,Lppo,d,R̄,mlt) + ionosphere_eq(r_xy(x,y))
+	#ne_total(x,y) = plasmasphere_eq(L_xy(x,y),Lppi,Lppo,d,R̄,mlt) + ionosphere_eq(r_xy(x,y))
+	ne_total(x,y) = diffusive_equilibrium(r_xy(x, y),plasmasphere_eq(L_xy(x,y),Lppi,Lppo,d,R̄,mlt)) + ionosphere_eq(r_xy(x,y))
 	sn = [ne_total(x,y) for x in x, y in y]
 
 	log_ne_tot(x,y) = log10(ne_total(x,y))
@@ -175,19 +181,68 @@ let
 	
 	#cmap = cgrad(:magma, scale = :log10)
 	#c1 = heatmap!(x, y, sn, colormap = cmap, colorrange = (10^2,10^3))
-	c1 = heatmap!(x./re, y./re, sln, colormap = :magma, colorrange = (0,5))
+	c1 = heatmap!(x./re, y./re, sln, colormap = :oslo, colorrange = (-1,5))
 	cbar1 = Colorbar(fig, c1, label = "log₁₀n (cm⁻³)", labelpadding = 0, width = 15, 
 		ticksize = 15, tickalign = 1, height = Relative(1))
 		
 
-	c2 = contour!(x./re, y./re, sL, linewidth = 0.85, colormap = :bilbao, levels = 1:0.5:6)
+	c2 = contour!(x./re, y./re, sL, linewidth = 0.85, colormap = :lajolla#=cgrad(:tokyo, rev=true)=#, levels = 1:0.5:6)
 	#cbar2 = Colorbar(fig, c1, label = "B magnitude", labelpadding = 0, width = 15, 
 	#	ticksize = 15, tickalign = 1, height = Relative(1))
 	
-	
+    r_sc = 0.95
+    θ_sc = pi:0.01:2*pi
+    sc(r,θ) = (r*sin(θ), r*cos(θ))
+    sc_coords = sc.(r_sc, θ_sc)
+    sc_points = Point2.(sc_coords)
+
 	poly!(Circle(Point2f(0,0), 1f0), color = :black)
+    poly!(sc_points, color = :white)
+
 	fig[1,1] = ax
 	fig[1,2] = cbar1
 	colgap!(fig.layout, 7)
 	fig
 end
+
+# minimal working example: plot semicircle
+# using CairoMakie
+let 
+
+    fig = Figure()
+	ax = Axis(fig, aspect = DataAspect())
+
+    r_sc = 0.95
+    θ_sc = pi:0.01:2*pi
+    sc(r,θ) = (r*sin(θ), r*cos(θ))
+    sc_coords = sc.(r_sc, θ_sc)
+    sc_points = Point2.(sc_coords)
+
+	poly!(Circle(Point2f(0,0), 1f0), color = :black)
+    poly!(sc_points, color = :white)
+
+    fig[1,1] = ax
+    fig
+    
+end
+
+r_sc = 0:0.1:1
+θ_sc = 0:0.01:2*pi
+sc_daynight(r_sc,θ_sc) = floor(θ_sc/pi)
+s_dn = [sc_daynight(r_sc,θ_sc) for r_sc in r_sc, θ_sc in θ_sc]
+c3 = heatmap!(r_sc, θ_sc, s_dn, colormap = :grayC, colorrange = (0,1))
+
+x_sc(r_sc,θ_sc) = r_sc*sin(θ_sc);
+y_sc(r_sc,θ_sc) = r_sc*cos(θ_sc);
+sc_x = [x_sc(r,θ) for r in r_sc, θ in θ_sc]
+sc_y = [y_sc(r,θ) for r in r_sc, θ in θ_sc]
+sc_xy = [sc_x, sc_y]
+
+x = -4*re:0.01*re:4*re
+y = -4*re:0.01*re:4*re
+r_xy(x,y) = (x^2 + y^2)^(1/2);
+θ_xy(x,y) = atan(y/x);
+
+# B-field lines: aka contours of constant L
+L_xy(x,y) = (r_xy(x,y)/re)/cos(θ_xy(x,y))^2
+sL = [L_xy(x,y) for x in x, y in y]
